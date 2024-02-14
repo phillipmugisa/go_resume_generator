@@ -25,10 +25,31 @@ type Storage interface {
 	DeleteProfile(data.Profile) error
 
 	// Session
-	CreateSession(session data.Session) error
+	CreateSession(data.Session) error
 	GetSession(data.User) (*data.Session, error)
 	DeleteSession(data.Session) error
 	CancelSession(data.User) error
+
+	// Projects
+	CreateProject(data.Project) error
+	GetProjects(map[string]string) ([]*data.Project, error)
+	GetProjectsByTechStack(map[string]string) ([]*data.Project, error)
+	DeleteProject(int) error
+
+	// Employment
+	CreateEmployment(data.Employment) error
+	GetEmployments(map[string]string) ([]*data.Employment, error)
+	DeleteEmployment(int) error
+
+	// Hobby
+	CreateHobby(data.Hobby) error
+	GetHobbies(map[string]string) ([]*data.Hobby, error)
+	DeleteHobby(int) error
+
+	// TechStack
+	CreateTechStack(data.TechStack) error
+	GetTechStacks(map[string]string) ([]*data.TechStack, error)
+	DeleteTechStack(int) error
 }
 
 type PostgresStorage struct {
@@ -81,6 +102,30 @@ func (s *PostgresStorage) SetUpDB() error {
 	}
 
 	if err := s.createSessionTable(); err != nil {
+		return err
+	}
+
+	if err := s.createProjectTable(); err != nil {
+		return err
+	}
+
+	if err := s.createEmploymentTable(); err != nil {
+		return err
+	}
+
+	if err := s.createTechStackTable(); err != nil {
+		return err
+	}
+
+	if err := s.createProjectTechStackTable(); err != nil {
+		return err
+	}
+
+	if err := s.createEmploymentTechStackTable(); err != nil {
+		return err
+	}
+
+	if err := s.createHobbiesTable(); err != nil {
 		return err
 	}
 
@@ -156,7 +201,7 @@ func (s *PostgresStorage) SetUserSocials(u data.User) error {
 
 	user_id, f_err := s.getUserID(u.Username)
 	if f_err != nil {
-		return nil
+		return f_err
 	}
 
 	q := "UPDATE Users SET portfolio = $1, github = $2, linkedin = $3, twitter = $4 WHERE id = $5"
@@ -231,7 +276,7 @@ func (s *PostgresStorage) GetProfile(username string) (*data.Profile, error) {
 
 	user_id, f_err := s.getUserID(username)
 	if f_err != nil {
-		return nil, nil
+		return nil, f_err
 	}
 
 	profile := new(data.Profile)
@@ -276,7 +321,7 @@ func (s *PostgresStorage) CreateProfile(p data.Profile) error {
 
 	user_id, f_err := s.getUserID(p.User.Username)
 	if f_err != nil {
-		return nil
+		return f_err
 	}
 
 	query := `INSERT INTO Profiles (user, role, about, views)
@@ -297,7 +342,7 @@ func (s *PostgresStorage) DeleteProfile(p data.Profile) error {
 
 	user_id, f_err := s.getUserID(p.User.Username)
 	if f_err != nil {
-		return nil
+		return f_err
 	}
 
 	_, err := s.db.Exec(q, user_id, p.Role)
@@ -325,7 +370,7 @@ func (s *PostgresStorage) CreateSession(session data.Session) error {
 
 	user_id, f_err := s.getUserID(session.User.Username)
 	if f_err != nil {
-		return nil
+		return f_err
 	}
 
 	_, err := s.db.Query(query, user_id, session.Key)
@@ -336,7 +381,7 @@ func (s *PostgresStorage) GetSession(u data.User) (*data.Session, error) {
 
 	user_id, f_err := s.getUserID(u.Username)
 	if f_err != nil {
-		return nil, nil
+		return nil, f_err
 	}
 
 	session := new(data.Session)
@@ -356,7 +401,7 @@ func (s *PostgresStorage) DeleteSession(ss data.Session) error {
 
 	user_id, f_err := s.getUserID(ss.User.Username)
 	if f_err != nil {
-		return nil
+		return f_err
 	}
 
 	_, err := s.db.Exec(q, user_id)
@@ -367,7 +412,7 @@ func (s *PostgresStorage) CancelSession(u data.User) error {
 
 	user_id, f_err := s.getUserID(u.Username)
 	if f_err != nil {
-		return nil
+		return f_err
 	}
 
 	q := "UPDATE Sessions SET expired = $1 WHERE id = $2"
@@ -377,3 +422,254 @@ func (s *PostgresStorage) CancelSession(u data.User) error {
 }
 
 // Session
+
+// Projects
+func (s *PostgresStorage) createProjectTable() error {
+	query := `CREATE TABLE IF NOT EXISTS Projects (
+		id SERIAL PRIMARY KEY,
+		user INT REFERENCES Users(id) ON DELETE CASCADE,
+		name VARCHAR(255) NOT NULL,
+		duration VARCHAR(255) NOT NULL,
+		start_date TIMESTAMP NOT NULL,
+		end_date TIMESTAMP NULL,
+		status VARCHAR(255) DEFAULT COMPLETED,
+		github VARCHAR(255) NULL,
+		prod_link VARCHAR(255) NULL,
+		description VARCHAR(255) NOT NULL,
+		created_on TIMESTAMP,
+		updated_on TIMESTAMP,
+	);`
+	_, err := s.db.Exec(query)
+	return err
+}
+
+func (s *PostgresStorage) CreateProject(p data.Project) error {
+	q := `INSERT INTO Projects (user, name, duration, start_date, end_date, status, github, prod_link, description, created_on, updated_on) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+
+	user_id, f_err := s.getUserID(p.User.Username)
+	if f_err != nil {
+		return f_err
+	}
+
+	_, err := s.db.Query(q, user_id, p.Name, p.Duration, p.Start_date, p.End_date, p.Status, p.Github, p.Prod_link, p.Description, p.Created_on, p.Updated_on)
+	return err
+}
+
+func (s *PostgresStorage) GetProjects(keys map[string]string) ([]*data.Project, error) {
+	// expects a map with keys: id, username, name, stack
+	id, ok := keys["id"]
+	if !ok {
+		id = ""
+	}
+
+	var user_id string
+	username, ok := keys["username"]
+	if !ok {
+		user_id = ""
+	} else {
+		u_id, f_err := s.getUserID(username)
+		if f_err != nil {
+			return nil, f_err
+		}
+		user_id = string(u_id)
+	}
+
+	name, ok := keys["name"]
+	if !ok {
+		name = ""
+	}
+
+	rows, err := s.db.Query("SELECT * FROM Projects WHERE id = $1 OR user = $2 OR name = $3", id, user_id, name)
+	if err != nil {
+		return nil, err
+	}
+
+	var projects []*data.Project
+	projects, err = scanProjects(rows)
+
+	stack, ok := keys["stack"]
+	if !ok {
+		return projects, nil
+	}
+	results, _ := s.GetProjectsByTechStack(map[string]string{"name": stack})
+	if err != nil {
+		return projects, nil
+	}
+
+	// TODO: refactor(write query in GetProjectsByTechStack)
+outer:
+	for _, v := range results {
+		for _, p := range projects {
+			if p.Id == v.Id {
+				continue outer
+			}
+		}
+		projects = append(projects, v)
+	}
+
+	return projects, nil
+}
+
+func (s *PostgresStorage) GetProjectsByTechStack(keys map[string]string) ([]*data.Project, error) {
+	// expects a map with keys: name
+
+	name, ok := keys["name"]
+	if !ok {
+		return nil, errors.New("Stack name not provided.")
+	}
+
+	var stack_id int
+	f_err := s.db.QueryRow("SELECT id FROM TechStacks WHERE name = $1", name).Scan(&stack_id)
+	if f_err != nil {
+		return nil, f_err
+	}
+
+	rows, err := s.db.Query("SELECT * FROM ProjectTechStack WHERE techstack_id = $1", stack_id)
+	if err != nil {
+		return nil, err
+	}
+	return scanProjects(rows)
+}
+
+func scanProjects(rows *sql.Rows) ([]*data.Project, error) {
+	var projects []*data.Project
+	for rows.Next() {
+		project := new(data.Project)
+		err := rows.Scan(
+			project.Id,
+			project.User,
+			project.Name,
+			project.Duration,
+			project.Start_date,
+			project.End_date,
+			project.Status,
+			project.Github,
+			project.Prod_link,
+			project.Description,
+			project.Created_on,
+			project.Updated_on,
+		)
+		if err != nil {
+			return projects, err
+		}
+		projects = append(projects, project)
+	}
+	return projects, nil
+}
+
+func (s *PostgresStorage) DeleteProject(id int) error {
+	q := "DELETE FROM Projects WHERE id = $1"
+
+	_, err := s.db.Exec(q, id)
+	return err
+}
+
+// Employment
+func (s *PostgresStorage) createEmploymentTable() error {
+	query := `CREATE TABLE IF NOT EXISTS Employments (
+		id SERIAL PRIMARY KEY,
+		user INT REFERENCES Users(id) ON DELETE CASCADE,
+		name VARCHAR(255) NOT NULL,
+		employee VARCHAR(255) NOT NULL,
+		start_date TIMESTAMP NOT NULL,
+		end_date TIMESTAMP NULL,
+		status VARCHAR(255) DEFAULT Current,
+		prod_link VARCHAR(255) NULL,
+		duration VARCHAR(255) NULL,
+		description VARCHAR(255) NOT NULL,
+		created_on TIMESTAMP,
+		updated_on TIMESTAMP,
+	);`
+	_, err := s.db.Exec(query)
+	return err
+}
+
+// func (s *PostgresStorage) CreateEmployment(data.Employment) error {
+
+// }
+
+// func (s *PostgresStorage) GetEmployments(keys map[string]string) ([]*data.Employment, error) {
+
+// }
+
+func (s *PostgresStorage) DeleteEmployment(id int) error {
+	q := "DELETE FROM Employments WHERE id = $1"
+
+	_, err := s.db.Exec(q, id)
+	return err
+}
+
+// // Hobby
+func (s *PostgresStorage) createHobbiesTable() error {
+	query := `CREATE TABLE IF NOT EXISTS Hobbies (
+		id SERIAL PRIMARY KEY,
+		user INT REFERENCES Users(id) ON DELETE CASCADE,
+		name VARCHAR(255) NOT NULL,
+	);`
+	_, err := s.db.Exec(query)
+	return err
+}
+
+// func (s *PostgresStorage) CreateHobby(data.Hobby) error {
+
+// }
+
+// func (s *PostgresStorage) GetHobbies(keys map[string]string) ([]*data.Hobby, error) {
+
+// }
+
+func (s *PostgresStorage) DeleteHobby(id int) error {
+	q := "DELETE FROM Hobbies WHERE id = $1"
+
+	_, err := s.db.Exec(q, id)
+	return err
+}
+
+// // TechStack
+func (s *PostgresStorage) createTechStackTable() error {
+	query := `CREATE TABLE IF NOT EXISTS TechStacks (
+		id SERIAL PRIMARY KEY,
+		user INT REFERENCES Users(id) ON DELETE CASCADE,
+		name VARCHAR(255) NOT NULL,
+	);`
+	_, err := s.db.Exec(query)
+	return err
+}
+
+// TECH STACK RELATIONSHIPS (M:M)
+func (s *PostgresStorage) createProjectTechStackTable() error {
+	query := `CREATE TABLE IF NOT EXISTS ProjectTechStack (
+		id SERIAL PRIMARY KEY,
+		techstack_id stack INT REFERENCES TechStacks(id) ON DELETE CASCADE,
+		project_id stack INT REFERENCES Projects(id) ON DELETE CASCADE,
+	);`
+	_, err := s.db.Exec(query)
+	return err
+}
+
+func (s *PostgresStorage) createEmploymentTechStackTable() error {
+	query := `CREATE TABLE IF NOT EXISTS ProjectTechStack (
+		id SERIAL PRIMARY KEY,
+		techstack_id stack INT REFERENCES TechStacks(id) ON DELETE CASCADE,
+		employment_id stack INT REFERENCES Employments(id) ON DELETE CASCADE,
+	);`
+	_, err := s.db.Exec(query)
+	return err
+}
+
+// TECH STACK RELATIONSHIPS
+
+// func (s *PostgresStorage) CreateTechStack(data.TechStack) error {
+
+// }
+
+// func (s *PostgresStorage) GetTechStacks(keys map[string]string) ([]*data.TechStack, error) {
+
+// }
+
+func (s *PostgresStorage) DeleteTechStack(id int) error {
+	q := "DELETE FROM TechStacks WHERE id = $1"
+
+	_, err := s.db.Exec(q, id)
+	return err
+}

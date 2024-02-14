@@ -6,6 +6,7 @@ import (
 
 // represents programming languages and tools
 type TechStack struct {
+	Id   int    `json:"id"`
 	User User   `json:"user"`
 	Name string `json:"name"`
 }
@@ -22,6 +23,7 @@ func (s TechStack) String() string {
 }
 
 type Project struct {
+	Id          int         `json:"id"`
 	User        User        `json:"user"`
 	Name        string      `json:"name"`
 	Duration    int         `json:"duration"`
@@ -79,6 +81,7 @@ func (p *Project) AddStack(s TechStack) error {
 }
 
 type Employment struct {
+	Id          int         `json:"id"`
 	User        User        `json:"user"`
 	Name        string      `json:"name"`
 	Employee    string      `json:"employee"`
@@ -135,6 +138,7 @@ func (e *Employment) AddStack(s TechStack) error {
 }
 
 type Hobby struct {
+	Id   int    `json:"id"`
 	User User   `json:"user"`
 	Name string `json:"name"`
 }
