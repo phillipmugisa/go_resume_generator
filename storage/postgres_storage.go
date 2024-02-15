@@ -39,6 +39,7 @@ type Storage interface {
 	// Employment
 	CreateEmployment(data.Employment) error
 	GetEmployments(map[string]string) ([]*data.Employment, error)
+	GetEmploymentsByTechStack(map[string]string) ([]*data.Employment, error)
 	DeleteEmployment(int) error
 
 	// Hobby
@@ -49,6 +50,10 @@ type Storage interface {
 	// TechStack
 	CreateTechStack(data.TechStack) error
 	GetTechStacks(map[string]string) ([]*data.TechStack, error)
+	GetProjectTechStacks(map[string]string) ([]*data.TechStack, error)
+	GetEmploymentTechStacks(map[string]string) ([]*data.TechStack, error)
+	AddTechStackToProject(data.TechStack, data.Project) error
+	AddTechStackToEmployment(data.TechStack, data.Project) error
 	DeleteTechStack(int) error
 }
 
@@ -159,6 +164,12 @@ func (s *PostgresStorage) createUserTable() error {
 }
 
 func (s *PostgresStorage) GetUsers(keywords map[string]string) ([]*data.User, error) {
+
+	id, ok := keywords["user_id"]
+	if !ok {
+		id = ""
+	}
+
 	username, ok := keywords["username"]
 	if !ok {
 		username = ""
@@ -169,8 +180,8 @@ func (s *PostgresStorage) GetUsers(keywords map[string]string) ([]*data.User, er
 		email = ""
 	}
 
-	query := `SELECT username, firstname, lastname, email, bio, phone, country FROM Users WHERE username = $1 OR email = $2`
-	rows, err := s.db.Query(query, username, email)
+	query := `SELECT username, firstname, lastname, email, bio, phone, country FROM Users WHERE username = $1 OR email = $2 OR id = $3`
+	rows, err := s.db.Query(query, username, email, id)
 	if err != nil {
 		return nil, err
 	}
@@ -457,87 +468,158 @@ func (s *PostgresStorage) CreateProject(p data.Project) error {
 
 func (s *PostgresStorage) GetProjects(keys map[string]string) ([]*data.Project, error) {
 	// expects a map with keys: id, username, name, stack
-	id, ok := keys["id"]
-	if !ok {
-		id = ""
-	}
+	// combines keys using and statement
 
-	var user_id string
-	username, ok := keys["username"]
-	if !ok {
-		user_id = ""
-	} else {
-		u_id, f_err := s.getUserID(username)
-		if f_err != nil {
-			return nil, f_err
+	if len(keys) == 0 {
+		return nil, errors.New("Provide search keyword.")
+	}
+	query := "SELECT * FROM Projects WHERE "
+
+	loop_counter := 0
+	for k, v := range keys {
+		if k == "stack" {
+			continue
 		}
-		user_id = string(u_id)
-	}
-
-	name, ok := keys["name"]
-	if !ok {
-		name = ""
-	}
-
-	rows, err := s.db.Query("SELECT * FROM Projects WHERE id = $1 OR user = $2 OR name = $3", id, user_id, name)
-	if err != nil {
-		return nil, err
-	}
-
-	var projects []*data.Project
-	projects, err = scanProjects(rows)
-
-	stack, ok := keys["stack"]
-	if !ok {
-		return projects, nil
-	}
-	results, _ := s.GetProjectsByTechStack(map[string]string{"name": stack})
-	if err != nil {
-		return projects, nil
-	}
-
-	// TODO: refactor(write query in GetProjectsByTechStack)
-outer:
-	for _, v := range results {
-		for _, p := range projects {
-			if p.Id == v.Id {
-				continue outer
+		if k == "username" {
+			user_id, err := s.getUserID(v)
+			if err != nil {
+				continue
 			}
+			k = "user"
+			v = fmt.Sprintf("%d", user_id)
 		}
-		projects = append(projects, v)
+		if loop_counter > 0 {
+			query = query + fmt.Sprintf("AND %s = %s ", k, v)
+		} else {
+			query = query + fmt.Sprintf("%s = %s ", k, v)
+		}
+		loop_counter++
+	}
+
+	projects := []*data.Project{}
+	if loop_counter > 0 {
+		rows, err := s.db.Query(query)
+		if err != nil {
+			return nil, err
+		}
+
+		projects, _ = s.scanProjects(rows)
+	}
+
+	stack_name, ok := keys["stack"]
+	if ok {
+		keywords := map[string]string{
+			"name": stack_name,
+		}
+		p_id, ok := keys["id"]
+		if ok {
+			keywords["project_id"] = p_id
+		}
+
+		username, ok := keys["username"]
+		if ok {
+			keywords["username"] = username
+		}
+
+		p, err := s.GetProjectsByTechStack(keywords)
+		if err != err {
+			return nil, nil
+		}
+
+		// only add record that havent been added yet
+	outer:
+		for _, v := range p {
+			for _, k := range projects {
+				if k.Id == v.Id {
+					// move to the next item in p (the outer loop)
+					continue outer
+				}
+			}
+			projects = append(projects, v)
+		}
 	}
 
 	return projects, nil
 }
 
 func (s *PostgresStorage) GetProjectsByTechStack(keys map[string]string) ([]*data.Project, error) {
-	// expects a map with keys: name
+	// expects a map with keys: techstack_id, name, project_id, username
 
-	name, ok := keys["name"]
-	if !ok {
-		return nil, errors.New("Stack name not provided.")
+	if len(keys) == 0 {
+		return nil, errors.New("Provide search keyword.")
 	}
 
-	var stack_id int
-	f_err := s.db.QueryRow("SELECT id FROM TechStacks WHERE name = $1", name).Scan(&stack_id)
-	if f_err != nil {
-		return nil, f_err
+	query := "SELECT * FROM ProjectTechStacks WHERE "
+
+	loop_counter := 0
+	for k, v := range keys {
+		if k == "name" {
+			var stack_id int
+			f_err := s.db.QueryRow("SELECT id FROM TechStacks WHERE name = $1", v).Scan(&stack_id)
+			if f_err != nil {
+				return nil, f_err
+			}
+			k = "techstack_id"
+			v = fmt.Sprintf("%d", stack_id)
+		}
+		if k == "username" {
+			continue
+		}
+		if loop_counter > 0 {
+			query = query + fmt.Sprintf("AND %s = %s ", k, v)
+		} else {
+			query = query + fmt.Sprintf("%s = %s ", k, v)
+		}
+		loop_counter++
 	}
 
-	rows, err := s.db.Query("SELECT * FROM ProjectTechStack WHERE techstack_id = $1", stack_id)
+	var projects []*data.Project
+
+	if loop_counter == 0 {
+		return nil, nil
+	}
+
+	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, err
 	}
-	return scanProjects(rows)
+
+	for rows.Next() {
+		record := new(struct {
+			id           string
+			techstack_id string
+			project_id   string
+		})
+		err := rows.Scan(record)
+		if err != nil {
+			continue
+		}
+
+		// get projects with found id
+		p, e := s.GetProjects(map[string]string{"id": record.project_id})
+		if e != nil {
+			return nil, e
+		}
+		username, ok := keys["username"]
+		if ok {
+			if p[0].User.Username != username {
+				continue
+			}
+		}
+		projects = append(projects, p[0])
+	}
+
+	return projects, nil
 }
 
-func scanProjects(rows *sql.Rows) ([]*data.Project, error) {
+func (s *PostgresStorage) scanProjects(rows *sql.Rows) ([]*data.Project, error) {
 	var projects []*data.Project
 	for rows.Next() {
 		project := new(data.Project)
+		var user_id int
 		err := rows.Scan(
 			project.Id,
-			project.User,
+			user_id,
 			project.Name,
 			project.Duration,
 			project.Start_date,
@@ -552,6 +634,10 @@ func scanProjects(rows *sql.Rows) ([]*data.Project, error) {
 		if err != nil {
 			return projects, err
 		}
+
+		users, _ := s.GetUsers(map[string]string{"user_id": fmt.Sprintf("%d", user_id)})
+		project.User = *users[0]
+
 		projects = append(projects, project)
 	}
 	return projects, nil
@@ -584,13 +670,190 @@ func (s *PostgresStorage) createEmploymentTable() error {
 	return err
 }
 
-// func (s *PostgresStorage) CreateEmployment(data.Employment) error {
+func (s *PostgresStorage) CreateEmployment(e data.Employment) error {
+	q := `INSERT INTO Employment (user, name, employee, start_date, end_date, status, prod_link, duration, description, created_on, updated_on) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
 
-// }
+	user_id, f_err := s.getUserID(e.User.Username)
+	if f_err != nil {
+		return f_err
+	}
 
-// func (s *PostgresStorage) GetEmployments(keys map[string]string) ([]*data.Employment, error) {
+	_, err := s.db.Query(q, user_id, e.Name, e.Employee, e.Start_date, e.End_date, e.Status, e.Prod_link, e.Duration, e.Description, e.Created_on, e.Updated_on)
+	return err
+}
 
-// }
+func (s *PostgresStorage) GetEmployments(keys map[string]string) ([]*data.Employment, error) {
+	// expects a map with keys: id, username, name, stack
+	// combines keys using and statement
+
+	if len(keys) == 0 {
+		return nil, errors.New("Provide search keyword.")
+	}
+	query := "SELECT * FROM Employments WHERE "
+
+	loop_counter := 0
+	for k, v := range keys {
+		if k == "stack" {
+			continue
+		}
+		if k == "username" {
+			user_id, err := s.getUserID(v)
+			if err != nil {
+				continue
+			}
+			k = "user"
+			v = fmt.Sprintf("%d", user_id)
+		}
+		if loop_counter > 0 {
+			query = query + fmt.Sprintf("AND %s = %s ", k, v)
+		} else {
+			query = query + fmt.Sprintf("%s = %s ", k, v)
+		}
+		loop_counter++
+	}
+
+	employments := []*data.Employment{}
+	if loop_counter > 0 {
+		rows, err := s.db.Query(query)
+		if err != nil {
+			return nil, err
+		}
+
+		employments, _ = s.scanEmployments(rows)
+	}
+
+	stack_name, ok := keys["stack"]
+	if ok {
+		keywords := map[string]string{
+			"name": stack_name,
+		}
+		p_id, ok := keys["id"]
+		if ok {
+			keywords["project_id"] = p_id
+		}
+
+		p, err := s.GetEmploymentsByTechStack(keywords)
+		if err != err {
+			return nil, nil
+		}
+
+		// only add record that havent been added yet
+	outer:
+		for _, v := range p {
+			for _, k := range employments {
+				if k.Id == v.Id {
+					// move to the next item in p (the outer loop)
+					continue outer
+				}
+			}
+			employments = append(employments, v)
+		}
+	}
+
+	return employments, nil
+}
+
+func (s *PostgresStorage) GetEmploymentsByTechStack(keys map[string]string) ([]*data.Employment, error) {
+	// expects a map with keys: id, name, employment_id, username
+
+	if len(keys) == 0 {
+		return nil, errors.New("Provide search keyword.")
+	}
+
+	query := "SELECT * FROM EmploymentTechStacks WHERE "
+
+	loop_counter := 0
+	for k, v := range keys {
+		if k == "name" {
+			var stack_id int
+			f_err := s.db.QueryRow("SELECT id FROM TechStacks WHERE name = $1", v).Scan(&stack_id)
+			if f_err != nil {
+				return nil, f_err
+			}
+			k = "techstack_id"
+			v = fmt.Sprintf("%d", stack_id)
+		}
+		if k == "username" {
+			continue
+		}
+		if loop_counter > 0 {
+			query = query + fmt.Sprintf("AND %s = %s ", k, v)
+		} else {
+			query = query + fmt.Sprintf("%s = %s ", k, v)
+		}
+		loop_counter++
+	}
+
+	if loop_counter == 0 {
+		return nil, nil
+	}
+
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+
+	var employments []*data.Employment
+	for rows.Next() {
+		record := new(struct {
+			id            string
+			techstack_id  string
+			employment_id string
+		})
+		err := rows.Scan(record)
+		if err != nil {
+			continue
+		}
+
+		// get employments with found id
+		p, e := s.GetEmployments(map[string]string{"id": record.employment_id})
+		if e != nil {
+			return nil, e
+		}
+
+		username, ok := keys["username"]
+		if ok {
+			// if username was passed, only add employments with this stack and user
+			if p[0].User.Username != username {
+				continue
+			}
+		}
+		employments = append(employments, p[0])
+	}
+
+	return employments, nil
+}
+
+func (s *PostgresStorage) scanEmployments(rows *sql.Rows) ([]*data.Employment, error) {
+	var Employments []*data.Employment
+	for rows.Next() {
+		Employment := new(data.Employment)
+		var user_id int
+		err := rows.Scan(
+			Employment.Id,
+			user_id,
+			Employment.Name,
+			Employment.Employee,
+			Employment.Start_date,
+			Employment.End_date,
+			Employment.Status,
+			Employment.Prod_link,
+			Employment.Duration,
+			Employment.Description,
+			Employment.Created_on,
+			Employment.Updated_on,
+		)
+		if err != nil {
+			return Employments, err
+		}
+
+		users, _ := s.GetUsers(map[string]string{"user_id": fmt.Sprintf("%d", user_id)})
+		Employment.User = *users[0]
+
+		Employments = append(Employments, Employment)
+	}
+	return Employments, nil
+}
 
 func (s *PostgresStorage) DeleteEmployment(id int) error {
 	q := "DELETE FROM Employments WHERE id = $1"
@@ -610,13 +873,66 @@ func (s *PostgresStorage) createHobbiesTable() error {
 	return err
 }
 
-// func (s *PostgresStorage) CreateHobby(data.Hobby) error {
+func (s *PostgresStorage) CreateHobby(h data.Hobby) error {
+	q := `INSERT INTO Hobbies (user, name) VALUES ($1, $2)`
 
-// }
+	user_id, f_err := s.getUserID(h.User.Username)
+	if f_err != nil {
+		return f_err
+	}
 
-// func (s *PostgresStorage) GetHobbies(keys map[string]string) ([]*data.Hobby, error) {
+	_, err := s.db.Query(q, user_id, h.Name)
+	return err
 
-// }
+}
+
+func (s *PostgresStorage) GetHobbies(keys map[string]string) ([]*data.Hobby, error) {
+	// expects keys: id, username, name
+
+	if len(keys) == 0 {
+		return nil, errors.New("Provide search keyword")
+	}
+
+	query := "SELECT * FROM Hobbies WHERE "
+
+	loop_counter := 0
+	for k, v := range keys {
+		if k == "username" {
+			user_id, err := s.getUserID(v)
+			if err != nil {
+				continue
+			}
+			k = "user"
+			v = fmt.Sprintf("%d", user_id)
+		}
+		if loop_counter > 0 {
+			query = query + fmt.Sprintf("AND %s = %s ", k, v)
+		} else {
+			query = query + fmt.Sprintf("%s = %s ", k, v)
+		}
+		loop_counter++
+	}
+
+	if loop_counter == 0 {
+		return nil, nil
+	}
+
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+
+	var hobbies []*data.Hobby
+	for rows.Next() {
+		hobbie := new(data.Hobby)
+		err := rows.Scan(hobbie)
+		if err != nil {
+			continue
+		}
+		hobbies = append(hobbies, hobbie)
+	}
+	return hobbies, nil
+}
 
 func (s *PostgresStorage) DeleteHobby(id int) error {
 	q := "DELETE FROM Hobbies WHERE id = $1"
@@ -638,7 +954,7 @@ func (s *PostgresStorage) createTechStackTable() error {
 
 // TECH STACK RELATIONSHIPS (M:M)
 func (s *PostgresStorage) createProjectTechStackTable() error {
-	query := `CREATE TABLE IF NOT EXISTS ProjectTechStack (
+	query := `CREATE TABLE IF NOT EXISTS ProjectTechStacks (
 		id SERIAL PRIMARY KEY,
 		techstack_id stack INT REFERENCES TechStacks(id) ON DELETE CASCADE,
 		project_id stack INT REFERENCES Projects(id) ON DELETE CASCADE,
@@ -648,7 +964,7 @@ func (s *PostgresStorage) createProjectTechStackTable() error {
 }
 
 func (s *PostgresStorage) createEmploymentTechStackTable() error {
-	query := `CREATE TABLE IF NOT EXISTS ProjectTechStack (
+	query := `CREATE TABLE IF NOT EXISTS EmploymentTechStacks (
 		id SERIAL PRIMARY KEY,
 		techstack_id stack INT REFERENCES TechStacks(id) ON DELETE CASCADE,
 		employment_id stack INT REFERENCES Employments(id) ON DELETE CASCADE,
@@ -659,17 +975,226 @@ func (s *PostgresStorage) createEmploymentTechStackTable() error {
 
 // TECH STACK RELATIONSHIPS
 
-// func (s *PostgresStorage) CreateTechStack(data.TechStack) error {
+func (s *PostgresStorage) CreateTechStack(t data.TechStack) error {
+	q := `INSERT INTO TechStacks (user, name) VALUES ($1, $2)`
 
-// }
+	user_id, f_err := s.getUserID(t.User.Username)
+	if f_err != nil {
+		return f_err
+	}
 
-// func (s *PostgresStorage) GetTechStacks(keys map[string]string) ([]*data.TechStack, error) {
+	_, err := s.db.Query(q, user_id, t.Name)
+	return err
+}
 
-// }
+func (s *PostgresStorage) GetTechStacks(keys map[string]string) ([]*data.TechStack, error) {
+	// expects keys: id, username, name
+
+	if len(keys) == 0 {
+		return nil, errors.New("Provide search keyword")
+	}
+
+	query := "SELECT * FROM TechStacks WHERE "
+
+	loop_counter := 0
+	for k, v := range keys {
+		if k == "username" {
+			user_id, err := s.getUserID(v)
+			if err != nil {
+				continue
+			}
+			k = "user"
+			v = fmt.Sprintf("%d", user_id)
+		}
+		if loop_counter > 0 {
+			query = query + fmt.Sprintf("AND %s = %s ", k, v)
+		} else {
+			query = query + fmt.Sprintf("%s = %s ", k, v)
+		}
+		loop_counter++
+	}
+
+	if loop_counter == 0 {
+		return nil, nil
+	}
+
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.scanTechStack(rows)
+}
+
+func (s *PostgresStorage) scanTechStack(rows *sql.Rows) ([]*data.TechStack, error) {
+	var stacks []*data.TechStack
+	for rows.Next() {
+		stack := new(data.TechStack)
+		err := rows.Scan(stack)
+		if err != nil {
+			continue
+		}
+		stacks = append(stacks, stack)
+	}
+	return stacks, nil
+}
+
+// returns techstacks for a given project
+func (s *PostgresStorage) GetProjectTechStacks(keys map[string]string) ([]*data.TechStack, error) {
+	// expects keys: project_id, project_name
+
+	if len(keys) == 0 {
+		return nil, errors.New("Provide search keyword")
+	}
+
+	query := "SELECT * FROM ProjectTechStacks WHERE "
+
+	project_id, _ := keys["project_id"]
+
+	project_name, ok := keys["project_name"]
+	if ok {
+		// get project id
+		results, err := s.GetProjects(map[string]string{"name": project_name})
+		if err != nil {
+			return nil, err
+		}
+		project_id = fmt.Sprintf("%d", results[0].Id)
+	}
+
+	rows, err := s.db.Query(fmt.Sprintf("%s project_id = %s", query, project_id))
+	if err != nil {
+		return nil, err
+	}
+
+	var stacks []*data.TechStack
+
+	for rows.Next() {
+		record := new(struct {
+			id           string
+			techstack_id string
+			project_id   string
+		})
+		err := rows.Scan(record)
+		if err != nil {
+			continue
+		}
+
+		// get techstacks with found id
+		stack, e := s.GetTechStacks(map[string]string{"id": record.techstack_id})
+		if e != nil {
+			return nil, e
+		}
+		username, ok := keys["username"]
+		if ok {
+			if stack[0].User.Username != username {
+				continue
+			}
+		}
+		stacks = append(stacks, stack[0])
+	}
+
+	return stacks, nil
+
+}
+
+// returns techstacks for a given employment
+func (s *PostgresStorage) GetEmploymentTechStacks(keys map[string]string) ([]*data.TechStack, error) {
+	// expects keys: employment_id, employment_name
+
+	if len(keys) == 0 {
+		return nil, errors.New("Provide search keyword")
+	}
+
+	query := "SELECT * FROM EmploymentTechStacks WHERE "
+
+	employment_id, _ := keys["employment_id"]
+
+	// get id for given username
+	employment_name, ok := keys["employment_name"]
+	if ok {
+		// get employment id
+		results, err := s.GetEmployments(map[string]string{"name": employment_name})
+		if err != nil {
+			return nil, err
+		}
+		employment_id = fmt.Sprintf("%d", results[0].Id)
+	}
+
+	rows, err := s.db.Query(fmt.Sprintf("%s employment_id = %s", query, employment_id))
+	if err != nil {
+		return nil, err
+	}
+
+	var stacks []*data.TechStack
+
+	for rows.Next() {
+		record := new(struct {
+			id            string
+			techstack_id  string
+			employment_id string
+		})
+		err := rows.Scan(record)
+		if err != nil {
+			continue
+		}
+
+		// get techstacks with found id
+		stack, e := s.GetTechStacks(map[string]string{"id": record.techstack_id})
+		if e != nil {
+			return nil, e
+		}
+		username, ok := keys["username"]
+		if ok {
+			if stack[0].User.Username != username {
+				continue
+			}
+		}
+		stacks = append(stacks, stack[0])
+	}
+
+	return stacks, nil
+
+}
 
 func (s *PostgresStorage) DeleteTechStack(id int) error {
 	q := "DELETE FROM TechStacks WHERE id = $1"
 
 	_, err := s.db.Exec(q, id)
 	return err
+}
+
+func (s *PostgresStorage) AddTechStackToProject(t data.TechStack, p data.Project) error {
+	// fetch project
+	projects, err := s.GetProjects(map[string]string{"name": p.Name, "id": fmt.Sprint(p.Id)})
+	if err != nil {
+		return err
+	}
+
+	// fetch tech stack
+	stacks, err := s.GetTechStacks(map[string]string{"name": p.Name, "id": fmt.Sprint(p.Id)})
+	if err != nil {
+		return err
+	}
+
+	// save to db
+	_, write_err := s.db.Exec("INSERT INTO ProjectTechStacks (techstack_id, project_id) VALUES ($1, $2)", stacks[0].Id, projects[0].Id)
+	return write_err
+}
+
+func (s *PostgresStorage) AddTechStackToEmployment(t data.TechStack, p data.Project) error {
+	// fetch employment
+	employments, err := s.GetEmployments(map[string]string{"name": p.Name, "id": fmt.Sprint(p.Id)})
+	if err != nil {
+		return err
+	}
+
+	// fetch tech stack
+	stacks, err := s.GetTechStacks(map[string]string{"name": p.Name, "id": fmt.Sprint(p.Id)})
+	if err != nil {
+		return err
+	}
+
+	// save to db
+	_, write_err := s.db.Exec("INSERT INTO ProjectTechStacks (techstack_id, project_id) VALUES ($1, $2)", stacks[0].Id, employments[0].Id)
+	return write_err
 }
