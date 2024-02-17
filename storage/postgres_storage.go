@@ -4,9 +4,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 
 	_ "github.com/lib/pq"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/phillipmugisa/go_resume_generator/data"
 )
 
@@ -73,20 +73,20 @@ func NewPostgresStorage() (*PostgresStorage, error) {
 }
 
 func initDB() (*sql.DB, error) {
-	HOST := os.Getenv("POSTGRES_HOST")
-	password := os.Getenv("POSTGRES_PASSWORD")
-	database := os.Getenv("POSTGRES_DB")
-	PORT := os.Getenv("POSTGRES_PORT")
-	username := os.Getenv("POSTGRES_USER")
+	// HOST := os.Getenv("POSTGRES_HOST")
+	// password := os.Getenv("POSTGRES_PASSWORD")
+	// database := os.Getenv("POSTGRES_DB")
+	// PORT := os.Getenv("POSTGRES_PORT")
+	// username := os.Getenv("POSTGRES_USER")
 
-	// make db connection
-	dbUrl := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		HOST, PORT, username, password, database)
+	// // make db connection
+	// dbUrl := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+	// 	HOST, PORT, username, password, database)
 
-	db, err := sql.Open("postgres", dbUrl)
+	db, err := sql.Open("sqlite3", ":memory")
 	if err != nil {
 		fmt.Println("ERROR: ", err)
-		return nil, errors.New("Couldnot connect to database")
+		return nil, errors.New("couldnot connect to database")
 	}
 
 	if err := db.Ping(); err != nil {
