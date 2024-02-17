@@ -114,8 +114,9 @@ func (a *AppServer) handleSignUp(c context.Context, w http.ResponseWriter, r *ht
 		}
 
 		// send verification link
-		http.Redirect(w, r, "/auth/login", http.StatusCreated)
-		return nil
+
+		contextData["success_message"] = "Activation link sent to your email"
+		return RenderHtml(c, w, "auth/login.html", contextData)
 	}
 
 	return RenderHtml(c, w, "auth/signup.html", contextData)

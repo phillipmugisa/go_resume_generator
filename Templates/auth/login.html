@@ -4,6 +4,19 @@
         <h2>Log in to your resume voult</h2>
         <p>Access/Modify/Share your resumes all in one place</p>
     </header>
+    
+    {{ if .error_message }}
+    <div class="">
+        <span>{{ .error_message }}</span>
+    </div>
+    {{ end }}
+    
+    {{ if .success_message }}
+    <div class="">
+        <span>{{ .success_message }}</span>
+    </div>
+    {{ end }}
+
     <form hx-post="/auth/login/"  hx-target="#app-area">
         <input type="text" name="username" placeholder="Username">
         <input type="password" name="password" id="">

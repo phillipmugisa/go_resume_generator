@@ -4,12 +4,12 @@
         <h2>Create your resume voult</h2>
         <p>Personal Details</p>
     </header>
+    {{ if .error_message }}
+    <div class="">
+        <span>{{ .error_message }}</span>
+    </div>
+    {{ end }}
     <form hx-post="/auth/signup/" hx-target="#app-area" hx-encoding="multipart/form-data">
-        {{ if .error_message }}
-        <div class="">
-            <span>{{ .error_message }}</span>
-        </div>
-        {{ end }}
         <input type="text" name="firstname" placeholder="Firstname" value="{{ .firstname }}">
         <input type="text" name="lastname" placeholder="Lastname" value="{{ .lastname }}">
         <input type="text" name="username" placeholder="Username" value="{{ .username }}">
