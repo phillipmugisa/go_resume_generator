@@ -4,65 +4,19 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/phillipmugisa/go_resume_generator/data"
 )
 
-type Storage interface {
-	// user data
-	CreateUser(data.User) error
-	GetUsers(map[string]string) ([]*data.User, error)
-	DeleteUser(data.User) error
-	VerifyUserEmail(string) ([]*data.User, error)
-	SetUserSocials(u data.User) error
-
-	// profile
-	CreateProfile(data.Profile) error
-	GetProfile(string) (*data.Profile, error)
-	GetProfileByRole(string) ([]*data.Profile, error)
-	DeleteProfile(data.Profile) error
-
-	// Session
-	CreateSession(data.Session) error
-	GetSession(data.User) (*data.Session, error)
-	DeleteSession(data.Session) error
-	CancelSession(data.User) error
-
-	// Projects
-	CreateProject(data.Project) error
-	GetProjects(map[string]string) ([]*data.Project, error)
-	GetProjectsByTechStack(map[string]string) ([]*data.Project, error)
-	DeleteProject(int) error
-
-	// Employment
-	CreateEmployment(data.Employment) error
-	GetEmployments(map[string]string) ([]*data.Employment, error)
-	GetEmploymentsByTechStack(map[string]string) ([]*data.Employment, error)
-	DeleteEmployment(int) error
-
-	// Hobby
-	CreateHobby(data.Hobby) error
-	GetHobbies(map[string]string) ([]*data.Hobby, error)
-	DeleteHobby(int) error
-
-	// TechStack
-	CreateTechStack(data.TechStack) error
-	GetTechStacks(map[string]string) ([]*data.TechStack, error)
-	GetProjectTechStacks(map[string]string) ([]*data.TechStack, error)
-	GetEmploymentTechStacks(map[string]string) ([]*data.TechStack, error)
-	AddTechStackToProject(data.TechStack, data.Project) error
-	AddTechStackToEmployment(data.TechStack, data.Project) error
-	DeleteTechStack(int) error
-}
-
 type PostgresStorage struct {
 	db *sql.DB
 }
 
 func NewPostgresStorage() (*PostgresStorage, error) {
-	db, err := initDB()
+	db, err := initPostgresDB()
 	if err != nil {
 		return nil, err
 	}
@@ -72,18 +26,17 @@ func NewPostgresStorage() (*PostgresStorage, error) {
 	}, nil
 }
 
-func initDB() (*sql.DB, error) {
-	// HOST := os.Getenv("POSTGRES_HOST")
-	// password := os.Getenv("POSTGRES_PASSWORD")
-	// database := os.Getenv("POSTGRES_DB")
-	// PORT := os.Getenv("POSTGRES_PORT")
-	// username := os.Getenv("POSTGRES_USER")
+func initPostgresDB() (*sql.DB, error) {
+	HOST := os.Getenv("POSTGRES_HOST")
+	password := os.Getenv("POSTGRES_PASSWORD")
+	database := os.Getenv("POSTGRES_DB")
+	PORT := os.Getenv("POSTGRES_PORT")
+	username := os.Getenv("POSTGRES_USER")
 
-	// // make db connection
-	// dbUrl := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-	// 	HOST, PORT, username, password, database)
+	// make db connection
+	dbUrl := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", HOST, PORT, username, password, database)
 
-	db, err := sql.Open("sqlite3", ":memory")
+	db, err := sql.Open("postgres", dbUrl)
 	if err != nil {
 		fmt.Println("ERROR: ", err)
 		return nil, errors.New("couldnot connect to database")
@@ -99,6 +52,10 @@ func initDB() (*sql.DB, error) {
 // create required tables in db: Users
 func (s *PostgresStorage) SetUpDB() error {
 	if err := s.createUserTable(); err != nil {
+		return err
+	}
+
+	if err := s.createUserImageTable(); err != nil {
 		return err
 	}
 
@@ -151,14 +108,26 @@ func (s *PostgresStorage) createUserTable() error {
 		phone VARCHAR(20) NULL,
 		country VARCHAR(100) NOT NULL,
 		email_verified BOOLEAN DEFAULT FALSE,
-		created_on TIMESTAMP NOT NUL,
-		updated_on TIMESTAMP NOT NUL,
-		last_sign_in TIMESTAMP NUL,
+		start_date TIMESTAMP NOT NULL,
+		years_of_work INT NULL,
+		created_on TIMESTAMP NOT NULL,
+		updated_on TIMESTAMP NOT NULL,
+		last_sign_in TIMESTAMP NULL,
 		portfolio VARCHAR(255) NULL,
 		github VARCHAR(255) NULL,
 		linkedin VARCHAR(255) NULL,
-		twitter VARCHAR(255) NULL,
-	);`
+		twitter VARCHAR(255) NULL
+	)`
+	_, err := s.db.Exec(query)
+	return err
+}
+
+func (s *PostgresStorage) createUserImageTable() error {
+	query := `CREATE TABLE IF NOT EXISTS UserImages (
+		id SERIAL PRIMARY KEY,
+		filename VARCHAR(255) NOT NULL UNIQUE,
+		user stack INT REFERENCES Users(id) ON DELETE CASCADE
+	)`
 	_, err := s.db.Exec(query)
 	return err
 }
@@ -189,8 +158,8 @@ func (s *PostgresStorage) GetUsers(keywords map[string]string) ([]*data.User, er
 }
 func (s *PostgresStorage) CreateUser(u data.User) error {
 
-	query := `INSERT INTO Users (username, firstname, lastname, email, password, phone, country, created_on, updated_on, bio)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);`
+	query := `INSERT INTO Users (username, firstname, lastname, email, password, phone, country, created_on, updated_on, bio, start_date, years_of_work)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);`
 
 	_, err := s.db.Query(
 		query,
@@ -204,6 +173,25 @@ func (s *PostgresStorage) CreateUser(u data.User) error {
 		u.Created_on,
 		u.Updated_on,
 		u.Bio,
+		u.Start_date,
+		u.Years_of_work,
+	)
+	return err
+}
+
+func (s *PostgresStorage) CreateUserimage(u data.User, filaname string) error {
+
+	user_id, f_err := s.getUserID(u.Username)
+	if f_err != nil {
+		return f_err
+	}
+
+	query := `INSERT INTO UserImages (filename,user) VALUES ($1, $2);`
+
+	_, err := s.db.Query(
+		query,
+		user_id,
+		filaname,
 	)
 	return err
 }
@@ -236,28 +224,6 @@ func (s *PostgresStorage) DeleteUser(u data.User) error {
 	return err
 }
 
-func scanUsers(rows *sql.Rows) ([]*data.User, error) {
-	users := []*data.User{}
-	for rows.Next() {
-		user := new(data.User)
-		err := rows.Scan(
-			&user.Username,
-			&user.Firstname,
-			&user.Lastname,
-			&user.Email,
-			&user.Bio,
-			&user.Phone,
-			&user.Country,
-		)
-
-		if err != nil {
-			return nil, err
-		}
-		users = append(users, user)
-	}
-	return users, nil
-}
-
 func (s *PostgresStorage) getUserID(username string) (int, error) {
 	var user_id int
 	f_err := s.db.QueryRow("SELECT id FROM Users WHERE username = $1", username).Scan(&user_id)
@@ -277,8 +243,8 @@ func (s *PostgresStorage) createProfileTable() error {
 		user INT REFERENCES Users(id) ON DELETE CASCADE,
 		role VARCHAR(255) NOT NULL UNIQUE,
 		about TEXT NOT NULL,
-		views INT,
-	);`
+		views INT
+	)`
 	_, err := s.db.Exec(query)
 	return err
 }
@@ -371,7 +337,7 @@ func (s *PostgresStorage) createSessionTable() error {
 		key VARCHAR(255) NOT NULL UNIQUE,
 		expires_on TIMESTAMP,
 		expired BOOLEAN DEFAULT FALSE
-	);`
+	)`
 	_, err := s.db.Exec(query)
 	return err
 }
@@ -448,8 +414,8 @@ func (s *PostgresStorage) createProjectTable() error {
 		prod_link VARCHAR(255) NULL,
 		description VARCHAR(255) NOT NULL,
 		created_on TIMESTAMP,
-		updated_on TIMESTAMP,
-	);`
+		updated_on TIMESTAMP
+	)`
 	_, err := s.db.Exec(query)
 	return err
 }
@@ -471,7 +437,7 @@ func (s *PostgresStorage) GetProjects(keys map[string]string) ([]*data.Project, 
 	// combines keys using and statement
 
 	if len(keys) == 0 {
-		return nil, errors.New("Provide search keyword.")
+		return nil, errors.New("provide search keyword.")
 	}
 	query := "SELECT * FROM Projects WHERE "
 
@@ -546,7 +512,7 @@ func (s *PostgresStorage) GetProjectsByTechStack(keys map[string]string) ([]*dat
 	// expects a map with keys: techstack_id, name, project_id, username
 
 	if len(keys) == 0 {
-		return nil, errors.New("Provide search keyword.")
+		return nil, errors.New("provide search keyword.")
 	}
 
 	query := "SELECT * FROM ProjectTechStacks WHERE "
@@ -664,8 +630,8 @@ func (s *PostgresStorage) createEmploymentTable() error {
 		duration VARCHAR(255) NULL,
 		description VARCHAR(255) NOT NULL,
 		created_on TIMESTAMP,
-		updated_on TIMESTAMP,
-	);`
+		updated_on TIMESTAMP
+	)`
 	_, err := s.db.Exec(query)
 	return err
 }
@@ -687,7 +653,7 @@ func (s *PostgresStorage) GetEmployments(keys map[string]string) ([]*data.Employ
 	// combines keys using and statement
 
 	if len(keys) == 0 {
-		return nil, errors.New("Provide search keyword.")
+		return nil, errors.New("provide search keyword.")
 	}
 	query := "SELECT * FROM Employments WHERE "
 
@@ -757,7 +723,7 @@ func (s *PostgresStorage) GetEmploymentsByTechStack(keys map[string]string) ([]*
 	// expects a map with keys: id, name, employment_id, username
 
 	if len(keys) == 0 {
-		return nil, errors.New("Provide search keyword.")
+		return nil, errors.New("provide search keyword.")
 	}
 
 	query := "SELECT * FROM EmploymentTechStacks WHERE "
@@ -867,8 +833,8 @@ func (s *PostgresStorage) createHobbiesTable() error {
 	query := `CREATE TABLE IF NOT EXISTS Hobbies (
 		id SERIAL PRIMARY KEY,
 		user INT REFERENCES Users(id) ON DELETE CASCADE,
-		name VARCHAR(255) NOT NULL,
-	);`
+		name VARCHAR(255) NOT NULL
+	)`
 	_, err := s.db.Exec(query)
 	return err
 }
@@ -890,7 +856,7 @@ func (s *PostgresStorage) GetHobbies(keys map[string]string) ([]*data.Hobby, err
 	// expects keys: id, username, name
 
 	if len(keys) == 0 {
-		return nil, errors.New("Provide search keyword")
+		return nil, errors.New("provide search keyword")
 	}
 
 	query := "SELECT * FROM Hobbies WHERE "
@@ -946,8 +912,8 @@ func (s *PostgresStorage) createTechStackTable() error {
 	query := `CREATE TABLE IF NOT EXISTS TechStacks (
 		id SERIAL PRIMARY KEY,
 		user INT REFERENCES Users(id) ON DELETE CASCADE,
-		name VARCHAR(255) NOT NULL,
-	);`
+		name VARCHAR(255) NOT NULL
+	)`
 	_, err := s.db.Exec(query)
 	return err
 }
@@ -957,8 +923,8 @@ func (s *PostgresStorage) createProjectTechStackTable() error {
 	query := `CREATE TABLE IF NOT EXISTS ProjectTechStacks (
 		id SERIAL PRIMARY KEY,
 		techstack_id stack INT REFERENCES TechStacks(id) ON DELETE CASCADE,
-		project_id stack INT REFERENCES Projects(id) ON DELETE CASCADE,
-	);`
+		project_id stack INT REFERENCES Projects(id) ON DELETE CASCADE
+	)`
 	_, err := s.db.Exec(query)
 	return err
 }
@@ -967,8 +933,8 @@ func (s *PostgresStorage) createEmploymentTechStackTable() error {
 	query := `CREATE TABLE IF NOT EXISTS EmploymentTechStacks (
 		id SERIAL PRIMARY KEY,
 		techstack_id stack INT REFERENCES TechStacks(id) ON DELETE CASCADE,
-		employment_id stack INT REFERENCES Employments(id) ON DELETE CASCADE,
-	);`
+		employment_id stack INT REFERENCES Employments(id) ON DELETE CASCADE
+	)`
 	_, err := s.db.Exec(query)
 	return err
 }
@@ -991,7 +957,7 @@ func (s *PostgresStorage) GetTechStacks(keys map[string]string) ([]*data.TechSta
 	// expects keys: id, username, name
 
 	if len(keys) == 0 {
-		return nil, errors.New("Provide search keyword")
+		return nil, errors.New("provide search keyword")
 	}
 
 	query := "SELECT * FROM TechStacks WHERE "
@@ -1044,7 +1010,7 @@ func (s *PostgresStorage) GetProjectTechStacks(keys map[string]string) ([]*data.
 	// expects keys: project_id, project_name
 
 	if len(keys) == 0 {
-		return nil, errors.New("Provide search keyword")
+		return nil, errors.New("provide search keyword")
 	}
 
 	query := "SELECT * FROM ProjectTechStacks WHERE "
@@ -1080,9 +1046,9 @@ func (s *PostgresStorage) GetProjectTechStacks(keys map[string]string) ([]*data.
 		}
 
 		// get techstacks with found id
-		stack, e := s.GetTechStacks(map[string]string{"id": record.techstack_id})
-		if e != nil {
-			return nil, e
+		stack, err := s.GetTechStacks(map[string]string{"id": record.techstack_id})
+		if err != nil {
+			return nil, err
 		}
 		username, ok := keys["username"]
 		if ok {
@@ -1102,7 +1068,7 @@ func (s *PostgresStorage) GetEmploymentTechStacks(keys map[string]string) ([]*da
 	// expects keys: employment_id, employment_name
 
 	if len(keys) == 0 {
-		return nil, errors.New("Provide search keyword")
+		return nil, errors.New("provide search keyword")
 	}
 
 	query := "SELECT * FROM EmploymentTechStacks WHERE "

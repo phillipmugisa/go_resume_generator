@@ -38,16 +38,19 @@ func (u User) String() string {
 }
 
 func NewUser(firstname, lastname, username, email, password, phone, bio, country, start_date string) (*User, error) {
+	if err := validateUserData(firstname, lastname, username, email, password, phone, bio, country, start_date); err != nil {
+		return nil, errors.New("user data validation error")
+	}
 	pwd, err := HashPassword(password)
 	if err != nil {
-		return nil, errors.New("Error hashing password")
+		return nil, errors.New("error hashing password")
 	}
 
 	if start_date == "" {
-		return nil, errors.New("Provide Programming Start Period.")
+		return nil, errors.New("provide working start period")
 	}
 
-	st, st_err := time.Parse("01/12/2024", start_date)
+	st, st_err := time.Parse("2006-01-02", start_date)
 	if st_err != nil {
 		return nil, st_err
 	}
@@ -72,6 +75,10 @@ func NewUser(firstname, lastname, username, email, password, phone, bio, country
 		Phone:          phone,
 		Country:        country,
 	}, nil
+}
+
+func validateUserData(firstname, lastname, username, email, password, phone, bio, country, start_date string) error {
+	return nil
 }
 
 func (u *User) SetSocials(portfolio, github, linkedin, twitter string) error {

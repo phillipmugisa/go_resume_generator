@@ -1,0 +1,36 @@
+{{ define "content" }}
+<div class="sign-up-form">
+    <header>
+        <h2>Create your resume voult</h2>
+        <p>Personal Details</p>
+    </header>
+    <form hx-post="/auth/signup/" hx-target="#app-area" hx-encoding="multipart/form-data">
+        {{ if .error_message }}
+        <div class="">
+            <span>{{ .error_message }}</span>
+        </div>
+        {{ end }}
+        <input type="text" name="firstname" placeholder="Firstname" value="{{ .firstname }}">
+        <input type="text" name="lastname" placeholder="Lastname" value="{{ .lastname }}">
+        <input type="text" name="username" placeholder="Username" value="{{ .username }}">
+        <input type="email" name="email" placeholder="Email" value="{{ .email }}">
+        <input type="text" name="phone" placeholder="Tel Number" value="{{ .phone }}">
+        <input type="text" name="country" placeholder="Country" value="{{ .country }}">
+        <div>
+            <label for="resume_image">Select Resume Image: </label>
+            <input type="file" name="resume_image" id="resume_image">
+        </div>
+        <div>
+            <label for="resume_image">When did you start: </label>
+            <input type="date" name="start_date">
+        </div>
+        <textarea name="bio_data" id="" cols="30" rows="5" placeholder="Bio Data(Who are you?)" value="{{ .bio_data }}"></textarea>
+        <input type="password" name="password" id="password" placeholder="Enter password">
+        <input type="password" name="conform_password" id="conform_password" placeholder="Confirm password">
+        <input type="submit" value="Register">
+    </form>
+    <footer>
+        <a hx-get="/auth/login/" hx-target="#app-area">Already have voult</a>
+    </footer>
+</div>
+{{ end }}

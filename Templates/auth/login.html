@@ -1,0 +1,16 @@
+{{ define "content" }}
+<div class="sign-in-form">
+    <header>
+        <h2>Log in to your resume voult</h2>
+        <p>Access/Modify/Share your resumes all in one place</p>
+    </header>
+    <form hx-post="/auth/login/"  hx-target="#app-area">
+        <input type="text" name="username" placeholder="Username">
+        <input type="password" name="password" id="">
+        <input type="submit" value="Sign in">
+    </form>
+    <footer>
+        <a hx-get="/auth/signup/" hx-target="#app-area">Create resume voult</a>
+    </footer>
+</div>
+{{ end }}
