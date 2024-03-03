@@ -8,6 +8,7 @@ import (
 )
 
 type User struct {
+	Id        string
 	Bio       string `json:"bio"`
 	Firstname string `json:"firstname"`
 	Lastname  string `json:"lastname"`
@@ -61,6 +62,7 @@ func NewUser(firstname, lastname, username, email, password, phone, bio, country
 	}
 
 	return &User{
+		Id:             "",
 		Bio:            bio,
 		Firstname:      firstname,
 		Lastname:       lastname,

@@ -51,6 +51,7 @@ func initPostgresDB() (*sql.DB, error) {
 
 // create required tables in db: Users
 func (s *PostgresStorage) SetUpDB() error {
+
 	if err := s.createUserTable(); err != nil {
 		return err
 	}
@@ -109,7 +110,7 @@ func (s *PostgresStorage) createUserTable() error {
 		country VARCHAR(100) NOT NULL,
 		email_verified BOOLEAN DEFAULT FALSE,
 		start_date TIMESTAMP NOT NULL,
-		years_of_work INT NULL,
+		years_of_work INTEGER NULL,
 		created_on TIMESTAMP NOT NULL,
 		updated_on TIMESTAMP NOT NULL,
 		last_sign_in TIMESTAMP NULL,
@@ -125,35 +126,33 @@ func (s *PostgresStorage) createUserTable() error {
 func (s *PostgresStorage) createUserImageTable() error {
 	query := `CREATE TABLE IF NOT EXISTS UserImages (
 		id SERIAL PRIMARY KEY,
-		filename VARCHAR(255) NOT NULL UNIQUE,
-		user stack INT REFERENCES Users(id) ON DELETE CASCADE
+		filename VARCHAR(255) NOT NULL,
+		user_id INTEGER REFERENCES Users(id) ON DELETE CASCADE
 	)`
 	_, err := s.db.Exec(query)
 	return err
 }
 
-func (s *PostgresStorage) GetUsers(keywords map[string]string) ([]*data.User, error) {
+func (s *PostgresStorage) GetUsers(keys map[string]string) ([]*data.User, error) {
 
-	id, ok := keywords["user_id"]
-	if !ok {
-		id = ""
+	query := "SELECT id, username, firstname, lastname, email, bio, phone, country, password FROM Users"
+	if len(keys) > 0 {
+		loop_counter := 0
+		for k, v := range keys {
+			if loop_counter > 0 {
+				query = query + fmt.Sprintf("AND %s = %s ", k, v)
+			} else {
+				query = query + fmt.Sprintf("%s = %s ", k, v)
+			}
+			loop_counter++
+		}
 	}
 
-	username, ok := keywords["username"]
-	if !ok {
-		username = ""
-	}
-
-	email, ok := keywords["email"]
-	if !ok {
-		email = ""
-	}
-
-	query := `SELECT username, firstname, lastname, email, bio, phone, country FROM Users WHERE username = $1 OR email = $2 OR id = $3`
-	rows, err := s.db.Query(query, username, email, id)
+	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, err
 	}
+
 	return scanUsers(rows)
 }
 func (s *PostgresStorage) CreateUser(u data.User) error {
@@ -186,12 +185,12 @@ func (s *PostgresStorage) CreateUserimage(u data.User, filaname string) error {
 		return f_err
 	}
 
-	query := `INSERT INTO UserImages (filename,user) VALUES ($1, $2);`
+	query := `INSERT INTO UserImages (filename, user_id) VALUES ($1, $2);`
 
 	_, err := s.db.Query(
 		query,
-		user_id,
 		filaname,
+		user_id,
 	)
 	return err
 }
@@ -240,10 +239,10 @@ func (s *PostgresStorage) getUserID(username string) (int, error) {
 func (s *PostgresStorage) createProfileTable() error {
 	query := `CREATE TABLE IF NOT EXISTS Profiles (
 		id SERIAL PRIMARY KEY,
-		user INT REFERENCES Users(id) ON DELETE CASCADE,
+		user_id INTEGER REFERENCES Users(id) ON DELETE CASCADE,
 		role VARCHAR(255) NOT NULL UNIQUE,
 		about TEXT NOT NULL,
-		views INT
+		views INTEGER
 	)`
 	_, err := s.db.Exec(query)
 	return err
@@ -301,7 +300,7 @@ func (s *PostgresStorage) CreateProfile(p data.Profile) error {
 		return f_err
 	}
 
-	query := `INSERT INTO Profiles (user, role, about, views)
+	query := `INSERT INTO Profiles (user_id, role, about, views)
 	VALUES ($1, $2, $3);`
 
 	_, err := s.db.Query(
@@ -333,7 +332,7 @@ func (s *PostgresStorage) DeleteProfile(p data.Profile) error {
 func (s *PostgresStorage) createSessionTable() error {
 	query := `CREATE TABLE IF NOT EXISTS Sessions (
 		id SERIAL PRIMARY KEY,
-		user INT REFERENCES Users(id) ON DELETE CASCADE,
+		user_id INTEGER REFERENCES Users(id) ON DELETE CASCADE,
 		key VARCHAR(255) NOT NULL UNIQUE,
 		expires_on TIMESTAMP,
 		expired BOOLEAN DEFAULT FALSE
@@ -343,26 +342,21 @@ func (s *PostgresStorage) createSessionTable() error {
 }
 
 func (s *PostgresStorage) CreateSession(session data.Session) error {
-	query := "INSERT INTO Sessions (user, key, expires) VALUES ($1, $2, $3)"
+	query := "INSERT INTO Sessions (user_id, key, expires_on, expired) VALUES ($1, $2, $3, $4)"
 
 	user_id, f_err := s.getUserID(session.User.Username)
 	if f_err != nil {
 		return f_err
 	}
 
-	_, err := s.db.Query(query, user_id, session.Key)
+	_, err := s.db.Query(query, user_id, session.Key, session.Expires_on, session.Expired)
 	return err
 }
 
-func (s *PostgresStorage) GetSession(u data.User) (*data.Session, error) {
-
-	user_id, f_err := s.getUserID(u.Username)
-	if f_err != nil {
-		return nil, f_err
-	}
+func (s *PostgresStorage) GetSession(key string) (*data.Session, error) {
 
 	session := new(data.Session)
-	q := s.db.QueryRow("SELECT Key, expires_on FROM Sessions WHERE user = $1", user_id)
+	q := s.db.QueryRow("SELECT Key, expires_on FROM Sessions WHERE Key = $1", key)
 	err := q.Scan(
 		&session.Key,
 		&session.Expires_on,
@@ -385,16 +379,10 @@ func (s *PostgresStorage) DeleteSession(ss data.Session) error {
 	return err
 }
 
-func (s *PostgresStorage) CancelSession(u data.User) error {
+func (s *PostgresStorage) CancelSession(session data.Session) error {
+	q := "UPDATE Sessions SET expired = $1 WHERE key = $2"
 
-	user_id, f_err := s.getUserID(u.Username)
-	if f_err != nil {
-		return f_err
-	}
-
-	q := "UPDATE Sessions SET expired = $1 WHERE id = $2"
-
-	_, err := s.db.Exec(q, true, user_id)
+	_, err := s.db.Exec(q, true, session.Key)
 	return err
 }
 
@@ -404,12 +392,12 @@ func (s *PostgresStorage) CancelSession(u data.User) error {
 func (s *PostgresStorage) createProjectTable() error {
 	query := `CREATE TABLE IF NOT EXISTS Projects (
 		id SERIAL PRIMARY KEY,
-		user INT REFERENCES Users(id) ON DELETE CASCADE,
+		user_id INTEGER REFERENCES Users(id) ON DELETE CASCADE,
 		name VARCHAR(255) NOT NULL,
 		duration VARCHAR(255) NOT NULL,
 		start_date TIMESTAMP NOT NULL,
 		end_date TIMESTAMP NULL,
-		status VARCHAR(255) DEFAULT COMPLETED,
+		status VARCHAR(255) DEFAULT 'COMPLETED',
 		github VARCHAR(255) NULL,
 		prod_link VARCHAR(255) NULL,
 		description VARCHAR(255) NOT NULL,
@@ -421,7 +409,7 @@ func (s *PostgresStorage) createProjectTable() error {
 }
 
 func (s *PostgresStorage) CreateProject(p data.Project) error {
-	q := `INSERT INTO Projects (user, name, duration, start_date, end_date, status, github, prod_link, description, created_on, updated_on) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+	q := `INSERT INTO Projects (user_id, name, duration, start_date, end_date, status, github, prod_link, description, created_on, updated_on) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
 
 	user_id, f_err := s.getUserID(p.User.Username)
 	if f_err != nil {
@@ -437,7 +425,7 @@ func (s *PostgresStorage) GetProjects(keys map[string]string) ([]*data.Project, 
 	// combines keys using and statement
 
 	if len(keys) == 0 {
-		return nil, errors.New("provide search keyword.")
+		return nil, errors.New("provide search keyword")
 	}
 	query := "SELECT * FROM Projects WHERE "
 
@@ -512,7 +500,7 @@ func (s *PostgresStorage) GetProjectsByTechStack(keys map[string]string) ([]*dat
 	// expects a map with keys: techstack_id, name, project_id, username
 
 	if len(keys) == 0 {
-		return nil, errors.New("provide search keyword.")
+		return nil, errors.New("provide search keyword")
 	}
 
 	query := "SELECT * FROM ProjectTechStacks WHERE "
@@ -620,12 +608,12 @@ func (s *PostgresStorage) DeleteProject(id int) error {
 func (s *PostgresStorage) createEmploymentTable() error {
 	query := `CREATE TABLE IF NOT EXISTS Employments (
 		id SERIAL PRIMARY KEY,
-		user INT REFERENCES Users(id) ON DELETE CASCADE,
+		user_id INTEGER REFERENCES Users(id) ON DELETE CASCADE,
 		name VARCHAR(255) NOT NULL,
 		employee VARCHAR(255) NOT NULL,
 		start_date TIMESTAMP NOT NULL,
 		end_date TIMESTAMP NULL,
-		status VARCHAR(255) DEFAULT Current,
+		status VARCHAR(255) DEFAULT 'Current',
 		prod_link VARCHAR(255) NULL,
 		duration VARCHAR(255) NULL,
 		description VARCHAR(255) NOT NULL,
@@ -637,7 +625,7 @@ func (s *PostgresStorage) createEmploymentTable() error {
 }
 
 func (s *PostgresStorage) CreateEmployment(e data.Employment) error {
-	q := `INSERT INTO Employment (user, name, employee, start_date, end_date, status, prod_link, duration, description, created_on, updated_on) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+	q := `INSERT INTO Employment (user_id, name, employee, start_date, end_date, status, prod_link, duration, description, created_on, updated_on) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
 
 	user_id, f_err := s.getUserID(e.User.Username)
 	if f_err != nil {
@@ -653,7 +641,7 @@ func (s *PostgresStorage) GetEmployments(keys map[string]string) ([]*data.Employ
 	// combines keys using and statement
 
 	if len(keys) == 0 {
-		return nil, errors.New("provide search keyword.")
+		return nil, errors.New("provide search keyword")
 	}
 	query := "SELECT * FROM Employments WHERE "
 
@@ -723,7 +711,7 @@ func (s *PostgresStorage) GetEmploymentsByTechStack(keys map[string]string) ([]*
 	// expects a map with keys: id, name, employment_id, username
 
 	if len(keys) == 0 {
-		return nil, errors.New("provide search keyword.")
+		return nil, errors.New("provide search keyword")
 	}
 
 	query := "SELECT * FROM EmploymentTechStacks WHERE "
@@ -832,7 +820,7 @@ func (s *PostgresStorage) DeleteEmployment(id int) error {
 func (s *PostgresStorage) createHobbiesTable() error {
 	query := `CREATE TABLE IF NOT EXISTS Hobbies (
 		id SERIAL PRIMARY KEY,
-		user INT REFERENCES Users(id) ON DELETE CASCADE,
+		user_id INTEGER REFERENCES Users(id) ON DELETE CASCADE,
 		name VARCHAR(255) NOT NULL
 	)`
 	_, err := s.db.Exec(query)
@@ -840,7 +828,7 @@ func (s *PostgresStorage) createHobbiesTable() error {
 }
 
 func (s *PostgresStorage) CreateHobby(h data.Hobby) error {
-	q := `INSERT INTO Hobbies (user, name) VALUES ($1, $2)`
+	q := `INSERT INTO Hobbies (user_id, name) VALUES ($1, $2)`
 
 	user_id, f_err := s.getUserID(h.User.Username)
 	if f_err != nil {
@@ -911,7 +899,7 @@ func (s *PostgresStorage) DeleteHobby(id int) error {
 func (s *PostgresStorage) createTechStackTable() error {
 	query := `CREATE TABLE IF NOT EXISTS TechStacks (
 		id SERIAL PRIMARY KEY,
-		user INT REFERENCES Users(id) ON DELETE CASCADE,
+		user_id INTEGER REFERENCES Users(id) ON DELETE CASCADE,
 		name VARCHAR(255) NOT NULL
 	)`
 	_, err := s.db.Exec(query)
@@ -922,8 +910,8 @@ func (s *PostgresStorage) createTechStackTable() error {
 func (s *PostgresStorage) createProjectTechStackTable() error {
 	query := `CREATE TABLE IF NOT EXISTS ProjectTechStacks (
 		id SERIAL PRIMARY KEY,
-		techstack_id stack INT REFERENCES TechStacks(id) ON DELETE CASCADE,
-		project_id stack INT REFERENCES Projects(id) ON DELETE CASCADE
+		techstack_id INTEGER REFERENCES TechStacks(id) ON DELETE CASCADE,
+		project_id INTEGER REFERENCES Projects(id) ON DELETE CASCADE
 	)`
 	_, err := s.db.Exec(query)
 	return err
@@ -932,8 +920,8 @@ func (s *PostgresStorage) createProjectTechStackTable() error {
 func (s *PostgresStorage) createEmploymentTechStackTable() error {
 	query := `CREATE TABLE IF NOT EXISTS EmploymentTechStacks (
 		id SERIAL PRIMARY KEY,
-		techstack_id stack INT REFERENCES TechStacks(id) ON DELETE CASCADE,
-		employment_id stack INT REFERENCES Employments(id) ON DELETE CASCADE
+		techstack_id INTEGER REFERENCES TechStacks(id) ON DELETE CASCADE,
+		employment_id INTEGER REFERENCES Employments(id) ON DELETE CASCADE
 	)`
 	_, err := s.db.Exec(query)
 	return err
@@ -942,7 +930,7 @@ func (s *PostgresStorage) createEmploymentTechStackTable() error {
 // TECH STACK RELATIONSHIPS
 
 func (s *PostgresStorage) CreateTechStack(t data.TechStack) error {
-	q := `INSERT INTO TechStacks (user, name) VALUES ($1, $2)`
+	q := `INSERT INTO TechStacks (user_id, name) VALUES ($1, $2)`
 
 	user_id, f_err := s.getUserID(t.User.Username)
 	if f_err != nil {

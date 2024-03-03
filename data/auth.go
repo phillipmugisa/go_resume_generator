@@ -9,6 +9,7 @@ import (
 const Session_duration = time.Hour * 24 * 3 // 3 days
 
 type Session struct {
+	Id         string
 	User       User
 	Key        string
 	Expires_on time.Time
@@ -21,6 +22,7 @@ func (u User) NewSession() (*Session, error) {
 		return nil, err
 	}
 	return &Session{
+		Id:         "",
 		User:       u,
 		Key:        key,
 		Expires_on: time.Now().Add(Session_duration),

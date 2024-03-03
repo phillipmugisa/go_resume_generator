@@ -3,6 +3,7 @@ package storage
 import (
 	"database/sql"
 
+	"github.com/google/uuid"
 	"github.com/phillipmugisa/go_resume_generator/data"
 )
 
@@ -23,9 +24,9 @@ type Storage interface {
 
 	// Session
 	CreateSession(data.Session) error
-	GetSession(data.User) (*data.Session, error)
+	GetSession(string) (*data.Session, error)
 	DeleteSession(data.Session) error
-	CancelSession(data.User) error
+	CancelSession(data.Session) error
 
 	// Projects
 	CreateProject(data.Project) error
@@ -59,6 +60,7 @@ func scanUsers(rows *sql.Rows) ([]*data.User, error) {
 	for rows.Next() {
 		user := new(data.User)
 		err := rows.Scan(
+			&user.Id,
 			&user.Username,
 			&user.Firstname,
 			&user.Lastname,
@@ -66,6 +68,7 @@ func scanUsers(rows *sql.Rows) ([]*data.User, error) {
 			&user.Bio,
 			&user.Phone,
 			&user.Country,
+			&user.Password,
 		)
 
 		if err != nil {
@@ -74,4 +77,10 @@ func scanUsers(rows *sql.Rows) ([]*data.User, error) {
 		users = append(users, user)
 	}
 	return users, nil
+}
+
+func GenerateRecordId() string {
+
+	uuid := uuid.New()
+	return uuid.String()
 }

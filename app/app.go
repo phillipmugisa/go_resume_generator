@@ -3,21 +3,7 @@ package app
 import (
 	"fmt"
 	"net/http"
-
-	"github.com/phillipmugisa/go_resume_generator/storage"
 )
-
-type AppServer struct {
-	port    string
-	storage storage.Storage
-}
-
-func NewAppServer(p string, s storage.Storage) *AppServer {
-	return &AppServer{
-		port:    p,
-		storage: s,
-	}
-}
 
 func (a *AppServer) Run() error {
 	sm := http.NewServeMux()
@@ -30,7 +16,7 @@ func (a *AppServer) Run() error {
 		Handler: sm,
 	}
 
-	fmt.Printf("Running server on port %s...", a.port)
+	fmt.Printf("Running server on port %s...\n", a.port)
 	return server.ListenAndServe()
 
 }

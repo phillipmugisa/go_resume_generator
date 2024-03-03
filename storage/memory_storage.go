@@ -115,7 +115,7 @@ func (s *MemoryStorage) createUserImageTable() error {
 	query := `CREATE TABLE IF NOT EXISTS UserImages (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		filename VARCHAR(255) NOT NULL UNIQUE,
-		user stack INT REFERENCES Users(id) ON DELETE CASCADE
+		user_id INT REFERENCES Users(id) ON DELETE CASCADE
 	)`
 	_, err := s.db.Exec(query)
 	return err
@@ -138,8 +138,19 @@ func (s *MemoryStorage) GetUsers(keywords map[string]string) ([]*data.User, erro
 		email = ""
 	}
 
-	query := `SELECT username, firstname, lastname, email, bio, phone, country FROM Users WHERE username = $1 OR email = $2 OR id = $3`
-	rows, err := s.db.Query(query, username, email, id)
+	var (
+		rows *sql.Rows
+		err  error
+	)
+
+	if len(keywords) == 0 {
+		query := `SELECT username, firstname, lastname, email, bio, phone, country FROM Users`
+		rows, err = s.db.Query(query)
+	} else {
+		query := `SELECT username, firstname, lastname, email, bio, phone, country FROM Users WHERE username = $1 OR email = $2 OR id = $3`
+		rows, err = s.db.Query(query, username, email, id)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +240,7 @@ func (s *MemoryStorage) getUserID(username string) (int, error) {
 func (s *MemoryStorage) createProfileTable() error {
 	query := `CREATE TABLE IF NOT EXISTS Profiles (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		user INT REFERENCES Users(id) ON DELETE CASCADE,
+		user_id INT REFERENCES Users(id) ON DELETE CASCADE,
 		role VARCHAR(255) NOT NULL UNIQUE,
 		about TEXT NOT NULL,
 		views INT
@@ -290,7 +301,7 @@ func (s *MemoryStorage) CreateProfile(p data.Profile) error {
 		return f_err
 	}
 
-	query := `INSERT INTO Profiles (user, role, about, views)
+	query := `INSERT INTO Profiles (user_id, role, about, views)
 	VALUES ($1, $2, $3);`
 
 	_, err := s.db.Query(
@@ -322,7 +333,7 @@ func (s *MemoryStorage) DeleteProfile(p data.Profile) error {
 func (s *MemoryStorage) createSessionTable() error {
 	query := `CREATE TABLE IF NOT EXISTS Sessions (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		user INT REFERENCES Users(id) ON DELETE CASCADE,
+		user_id INT REFERENCES Users(id) ON DELETE CASCADE,
 		key VARCHAR(255) NOT NULL UNIQUE,
 		expires_on TIMESTAMP,
 		expired BOOLEAN DEFAULT FALSE
@@ -332,7 +343,7 @@ func (s *MemoryStorage) createSessionTable() error {
 }
 
 func (s *MemoryStorage) CreateSession(session data.Session) error {
-	query := "INSERT INTO Sessions (user, key, expires) VALUES ($1, $2, $3)"
+	query := "INSERT INTO Sessions (user_id, key, expires) VALUES ($1, $2, $3)"
 
 	user_id, f_err := s.getUserID(session.User.Username)
 	if f_err != nil {
@@ -343,15 +354,10 @@ func (s *MemoryStorage) CreateSession(session data.Session) error {
 	return err
 }
 
-func (s *MemoryStorage) GetSession(u data.User) (*data.Session, error) {
-
-	user_id, f_err := s.getUserID(u.Username)
-	if f_err != nil {
-		return nil, f_err
-	}
+func (s *MemoryStorage) GetSession(key string) (*data.Session, error) {
 
 	session := new(data.Session)
-	q := s.db.QueryRow("SELECT Key, expires_on FROM Sessions WHERE user = $1", user_id)
+	q := s.db.QueryRow("SELECT Key, expires_on FROM Sessions WHERE Key = $1", key)
 	err := q.Scan(
 		&session.Key,
 		&session.Expires_on,
@@ -374,16 +380,10 @@ func (s *MemoryStorage) DeleteSession(ss data.Session) error {
 	return err
 }
 
-func (s *MemoryStorage) CancelSession(u data.User) error {
+func (s *MemoryStorage) CancelSession(session data.Session) error {
+	q := "UPDATE Sessions SET expired = $1 WHERE key = $2"
 
-	user_id, f_err := s.getUserID(u.Username)
-	if f_err != nil {
-		return f_err
-	}
-
-	q := "UPDATE Sessions SET expired = $1 WHERE id = $2"
-
-	_, err := s.db.Exec(q, true, user_id)
+	_, err := s.db.Exec(q, true, session.Key)
 	return err
 }
 
@@ -393,7 +393,7 @@ func (s *MemoryStorage) CancelSession(u data.User) error {
 func (s *MemoryStorage) createProjectTable() error {
 	query := `CREATE TABLE IF NOT EXISTS Projects (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		user INT REFERENCES Users(id) ON DELETE CASCADE,
+		user_id INT REFERENCES Users(id) ON DELETE CASCADE,
 		name VARCHAR(255) NOT NULL,
 		duration VARCHAR(255) NOT NULL,
 		start_date TIMESTAMP NOT NULL,
@@ -410,7 +410,7 @@ func (s *MemoryStorage) createProjectTable() error {
 }
 
 func (s *MemoryStorage) CreateProject(p data.Project) error {
-	q := `INSERT INTO Projects (user, name, duration, start_date, end_date, status, github, prod_link, description, created_on, updated_on) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+	q := `INSERT INTO Projects (user_id, name, duration, start_date, end_date, status, github, prod_link, description, created_on, updated_on) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
 
 	user_id, f_err := s.getUserID(p.User.Username)
 	if f_err != nil {
@@ -426,7 +426,7 @@ func (s *MemoryStorage) GetProjects(keys map[string]string) ([]*data.Project, er
 	// combines keys using and statement
 
 	if len(keys) == 0 {
-		return nil, errors.New("provide search keyword.")
+		return nil, errors.New("provide search keyword")
 	}
 	query := "SELECT * FROM Projects WHERE "
 
@@ -501,7 +501,7 @@ func (s *MemoryStorage) GetProjectsByTechStack(keys map[string]string) ([]*data.
 	// expects a map with keys: techstack_id, name, project_id, username
 
 	if len(keys) == 0 {
-		return nil, errors.New("provide search keyword.")
+		return nil, errors.New("provide search keyword")
 	}
 
 	query := "SELECT * FROM ProjectTechStacks WHERE "
@@ -609,7 +609,7 @@ func (s *MemoryStorage) DeleteProject(id int) error {
 func (s *MemoryStorage) createEmploymentTable() error {
 	query := `CREATE TABLE IF NOT EXISTS Employments (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		user INT REFERENCES Users(id) ON DELETE CASCADE,
+		user_id INT REFERENCES Users(id) ON DELETE CASCADE,
 		name VARCHAR(255) NOT NULL,
 		employee VARCHAR(255) NOT NULL,
 		start_date TIMESTAMP NOT NULL,
@@ -626,7 +626,7 @@ func (s *MemoryStorage) createEmploymentTable() error {
 }
 
 func (s *MemoryStorage) CreateEmployment(e data.Employment) error {
-	q := `INSERT INTO Employment (user, name, employee, start_date, end_date, status, prod_link, duration, description, created_on, updated_on) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+	q := `INSERT INTO Employment (user_id, name, employee, start_date, end_date, status, prod_link, duration, description, created_on, updated_on) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
 
 	user_id, f_err := s.getUserID(e.User.Username)
 	if f_err != nil {
@@ -642,7 +642,7 @@ func (s *MemoryStorage) GetEmployments(keys map[string]string) ([]*data.Employme
 	// combines keys using and statement
 
 	if len(keys) == 0 {
-		return nil, errors.New("provide search keyword.")
+		return nil, errors.New("provide search keyword")
 	}
 	query := "SELECT * FROM Employments WHERE "
 
@@ -712,7 +712,7 @@ func (s *MemoryStorage) GetEmploymentsByTechStack(keys map[string]string) ([]*da
 	// expects a map with keys: id, name, employment_id, username
 
 	if len(keys) == 0 {
-		return nil, errors.New("provide search keyword.")
+		return nil, errors.New("provide search keyword")
 	}
 
 	query := "SELECT * FROM EmploymentTechStacks WHERE "
@@ -821,7 +821,7 @@ func (s *MemoryStorage) DeleteEmployment(id int) error {
 func (s *MemoryStorage) createHobbiesTable() error {
 	query := `CREATE TABLE IF NOT EXISTS Hobbies (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		user INT REFERENCES Users(id) ON DELETE CASCADE,
+		user_id INT REFERENCES Users(id) ON DELETE CASCADE,
 		name VARCHAR(255) NOT NULL
 	)`
 	_, err := s.db.Exec(query)
@@ -829,7 +829,7 @@ func (s *MemoryStorage) createHobbiesTable() error {
 }
 
 func (s *MemoryStorage) CreateHobby(h data.Hobby) error {
-	q := `INSERT INTO Hobbies (user, name) VALUES ($1, $2)`
+	q := `INSERT INTO Hobbies (user_id, name) VALUES ($1, $2)`
 
 	user_id, f_err := s.getUserID(h.User.Username)
 	if f_err != nil {
@@ -900,7 +900,7 @@ func (s *MemoryStorage) DeleteHobby(id int) error {
 func (s *MemoryStorage) createTechStackTable() error {
 	query := `CREATE TABLE IF NOT EXISTS TechStacks (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		user INT REFERENCES Users(id) ON DELETE CASCADE,
+		user_id INT REFERENCES Users(id) ON DELETE CASCADE,
 		name VARCHAR(255) NOT NULL
 	)`
 	_, err := s.db.Exec(query)
@@ -931,7 +931,7 @@ func (s *MemoryStorage) createEmploymentTechStackTable() error {
 // TECH STACK RELATIONSHIPS
 
 func (s *MemoryStorage) CreateTechStack(t data.TechStack) error {
-	q := `INSERT INTO TechStacks (user, name) VALUES ($1, $2)`
+	q := `INSERT INTO TechStacks (user_id, name) VALUES ($1, $2)`
 
 	user_id, f_err := s.getUserID(t.User.Username)
 	if f_err != nil {

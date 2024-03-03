@@ -1,5 +1,5 @@
 build:
-	@go build -o ./bin/server ./cmd/main.go
+	@go build -o ./bin/server .
 
 run: build
 	@./bin/server

@@ -5,6 +5,9 @@
     <div>
         <a hx-get="/auth/login/" hx-target="#app-area">Create Your Resume</a>
     </div>
+    {{ block "user_list" . }}
+        This is a user list placeholder
+    {{ end }}
     <div>
         <span>Developed By: </span>
         <a href="https://mugisathedev.netlify.app/"><i class="fa fa-globe"></i> Mugisa</a>

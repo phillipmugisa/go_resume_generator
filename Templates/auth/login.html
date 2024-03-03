@@ -18,7 +18,7 @@
     {{ end }}
 
     <form hx-post="/auth/login/"  hx-target="#app-area">
-        <input type="text" name="username" placeholder="Username">
+        <input type="text" name="username" placeholder="Username" value="{{ .username }}">
         <input type="password" name="password" id="">
         <input type="submit" value="Sign in">
     </form>
