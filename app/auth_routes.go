@@ -17,6 +17,8 @@ func (a *AppServer) handleAuthView(c context.Context, w http.ResponseWriter, r *
 		return a.handleLogin(c, w, r)
 	case "/signup/":
 		return a.handleSignUp(c, w, r)
+	case "/logout/":
+		return a.handleLogout(c, w, r)
 	default:
 		return errors.New("page not found")
 	}
@@ -55,6 +57,17 @@ func (a *AppServer) handleLogin(c context.Context, w http.ResponseWriter, r *htt
 
 	// if not logged in display landing page
 	return a.RenderHtml(c, w, r, []string{"auth/login.html"}, contextData)
+}
+
+func (a *AppServer) handleLogout(c context.Context, w http.ResponseWriter, r *http.Request) error {
+	err := a.Logout(w, r)
+	if err == nil {
+		http.Redirect(w, r, "/auth/login/", http.StatusMovedPermanently)
+		return nil
+	}
+
+	http.Redirect(w, r, "/", http.StatusMovedPermanently)
+	return nil
 }
 
 func (a *AppServer) handleSignUp(c context.Context, w http.ResponseWriter, r *http.Request) error {

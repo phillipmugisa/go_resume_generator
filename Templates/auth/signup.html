@@ -1,36 +1,36 @@
 {{ define "content" }}
-<div class="sign-up-form">
-    <header>
-        <h2>Create your resume voult</h2>
-        <p>Personal Details</p>
+<div class="grid justify-center bg-white shadow-lg justify-self-center gap-6 py-12 px-6 text-center w-4/12 rounded-xl">
+    <header class="grid gap-2">
+        <h2 class="text-xl text-slate-900 font-medium capitalize">Create your resume voult</h2>
+        <p class="text-base text-slate-500 font-normal">Access/Modify/Share your resumes all in one place</p>
     </header>
     {{ if .error_message }}
     <div class="">
         <span>{{ .error_message }}</span>
     </div>
     {{ end }}
-    <form hx-post="/auth/signup/" hx-target="#app-area" hx-encoding="multipart/form-data">
-        <input type="text" name="firstname" placeholder="Firstname" value="{{ .firstname }}">
-        <input type="text" name="lastname" placeholder="Lastname" value="{{ .lastname }}">
-        <input type="text" name="username" placeholder="Username" value="{{ .username }}">
-        <input type="email" name="email" placeholder="Email" value="{{ .email }}">
-        <input type="text" name="phone" placeholder="Tel Number" value="{{ .phone }}">
-        <input type="text" name="country" placeholder="Country" value="{{ .country }}">
-        <div>
-            <label for="resume_image">Select Resume Image: </label>
-            <input type="file" name="resume_image" id="resume_image">
+    <form hx-post="/auth/signup/" hx-target="#app-area" hx-encoding="multipart/form-data" class="grid gap-4">
+        <input type="text" name="firstname" placeholder="Firstname" value="{{ .firstname }}"  class="px-3 py-3 text-base text-gray-800 border-solid border-2 border-slate-300 rounded bg-gray-50 outline-transparent focus:outline-slate-400 w-full">
+        <input type="text" name="lastname" placeholder="Lastname" value="{{ .lastname }}"  class="px-3 py-3 text-base text-gray-800 border-solid border-2 border-slate-300 rounded bg-gray-50 outline-transparent focus:outline-slate-400 w-full">
+        <input type="text" name="username" placeholder="Username" value="{{ .username }}"  class="px-3 py-3 text-base text-gray-800 border-solid border-2 border-slate-300 rounded bg-gray-50 outline-transparent focus:outline-slate-400 w-full">
+        <input type="email" name="email" placeholder="Email" value="{{ .email }}"  class="px-3 py-3 text-base text-gray-800 border-solid border-2 border-slate-300 rounded bg-gray-50 outline-transparent focus:outline-slate-400 w-full">
+        <input type="text" name="phone" placeholder="Tel Number" value="{{ .phone }}"  class="px-3 py-3 text-base text-gray-800 border-solid border-2 border-slate-300 rounded bg-gray-50 outline-transparent focus:outline-slate-400 w-full">
+        <input type="text" name="country" placeholder="Country" value="{{ .country }}"  class="px-3 py-3 text-base text-gray-800 border-solid border-2 border-slate-300 rounded bg-gray-50 outline-transparent focus:outline-slate-400 w-full">
+        <div class="grid grid-flow-col gap-2 justify-start items-center">
+            <label class="text-base text-slate-700" for="resume_image">Select Resume Image: </label>
+            <input type="file" name="resume_image" id="resume_image"  class="px-3 py-3 text-base text-gray-800 border-solid border-2 border-slate-300 rounded bg-gray-50 outline-transparent focus:outline-slate-400 w-full">
         </div>
-        <div>
-            <label for="resume_image">When did you start: </label>
-            <input type="date" name="start_date">
+        <div class="grid grid-flow-col gap-2 justify-start items-center">
+            <label class="text-base text-slate-700" for="resume_image">When did you start: </label>
+            <input type="date" name="start_date"  class="px-3 py-3 text-base text-gray-800 border-solid border-2 border-slate-300 rounded bg-gray-50 outline-transparent focus:outline-slate-400 w-full">
         </div>
-        <textarea name="bio_data" id="" cols="30" rows="5" placeholder="Bio Data(Who are you?)" value="{{ .bio_data }}"></textarea>
-        <input type="password" name="password" id="password" placeholder="Enter password">
-        <input type="password" name="conform_password" id="conform_password" placeholder="Confirm password">
-        <input type="submit" value="Register">
+        <textarea name="bio_data" id="" cols="30" rows="5" placeholder="Bio Data(Who are you?)" value="{{ .bio_data }}"  class="px-3 py-3 text-base text-gray-800 border-solid border-2 border-slate-300 rounded bg-gray-50 outline-transparent focus:outline-slate-400 w-full"></textarea>
+        <input type="password" name="password" id="password" placeholder="Enter password"  class="px-3 py-3 text-base text-gray-800 border-solid border-2 border-slate-300 rounded bg-gray-50 outline-transparent focus:outline-slate-400 w-full">
+        <input type="password" name="conform_password" id="conform_password" placeholder="Confirm password"  class="px-3 py-3 text-base text-gray-800 border-solid border-2 border-slate-300 rounded bg-gray-50 outline-transparent focus:outline-slate-400 w-full">
+        <input type="submit" value="Register" class="px-6 py-3 text-base bg-slate-900 text-slate-50 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors duration-200 ease-in-out"  class="px-3 py-3 text-base text-gray-800 border-solid border-2 border-slate-300 rounded bg-gray-50 outline-transparent focus:outline-slate-400 w-full">
     </form>
     <footer>
-        <a hx-get="/auth/login/" hx-target="#app-area">Already have voult</a>
+        <a hx-get="/auth/login/" hx-target="#app-area" class="cursor-pointer text-teal-500 text-base">Already have voult</a>
     </footer>
 </div>
 {{ end }}

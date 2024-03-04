@@ -22,8 +22,9 @@ func (a *AppServer) Run() error {
 }
 
 func (a *AppServer) registerRoutes(sm *http.ServeMux) {
-	sm.HandleFunc("/", MakeHTTPHandler(a.handleHomeView))
 	sm.HandleFunc("/auth/", MakeHTTPHandler(a.handleAuthView))
+	sm.HandleFunc("/landing/", MakeHTTPHandler(a.handleLandingView))
+	sm.HandleFunc("/", MakeHTTPHandler(a.handleHomeView))
 }
 
 func registerStaticRoutes(sm *http.ServeMux) {

@@ -42,7 +42,6 @@ func (a *AppServer) HandleImageUpload(user data.User, r *http.Request) error {
 			// assign default avator
 			filedbWriteErr := a.storage.CreateUserimage(user, filepath.Join("media/users/images", "avatar.png"))
 			if filedbWriteErr != nil {
-				fmt.Println(filedbWriteErr)
 				return errors.New("error saving file")
 			}
 		}
@@ -64,7 +63,6 @@ func (a *AppServer) HandleImageUpload(user data.User, r *http.Request) error {
 		// save in database
 		filedbWriteErr := a.storage.CreateUserimage(user, strings.ReplaceAll(destination.Name(), "\\", "/"))
 		if filedbWriteErr != nil {
-			fmt.Println(filedbWriteErr)
 			os.Remove(destination.Name())
 			return errors.New("error saving file")
 		}
@@ -143,23 +141,29 @@ func (a AppServer) IsAuthenticated(r *http.Request) (*data.User, error) {
 
 	// is the session expired
 	if session.Expired {
-		a.storage.DeleteSession(*session)
+		err := a.storage.DeleteSession(*session)
+		if err != nil {
+			return nil, err
+		}
 
 		// user should log in again
 		return nil, errors.New("expired session")
 	}
 
 	if session.Expires_on.Equal(time.Now()) || time.Now().After(session.Expires_on) {
-		a.storage.CancelSession(*session)
+		err := a.storage.CancelSession(*session)
+		if err != nil {
+			return nil, err
+		}
 
 		// user should log in again
 		return nil, errors.New("expired session")
 	}
 
 	// get the user
-	users, err := a.storage.GetUsers(map[string]string{"user_id": session.Id})
+	users, err := a.storage.GetUsers(map[string]string{"id": session.User.Id})
 	if err != nil {
-		return nil, errors.New("errre getting user")
+		return nil, errors.New("error getting user")
 	}
 
 	return users[0], nil
@@ -167,7 +171,7 @@ func (a AppServer) IsAuthenticated(r *http.Request) (*data.User, error) {
 
 func (a AppServer) Login(username, password string, w http.ResponseWriter) error {
 	// get user if the same username
-	users, err := a.storage.GetUsers(map[string]string{"username": username})
+	users, err := a.storage.GetUsers(map[string]string{"username": fmt.Sprint(username)})
 	if err != nil {
 		return err
 	}
@@ -190,7 +194,6 @@ func (a AppServer) Login(username, password string, w http.ResponseWriter) error
 
 	ss_creation_err := a.storage.CreateSession(*session)
 	if ss_creation_err != nil {
-		fmt.Println("ss_creation_err: ", ss_creation_err)
 		return ss_creation_err
 	}
 
@@ -204,6 +207,42 @@ func (a AppServer) Login(username, password string, w http.ResponseWriter) error
 		SameSite: http.SameSiteLaxMode,
 	}
 	http.SetCookie(w, &cookie)
+
+	return nil
+}
+
+func (a AppServer) Logout(w http.ResponseWriter, r *http.Request) error {
+	// check is user is logged in
+	_, err := a.IsAuthenticated(r)
+	if err != nil {
+		return err
+	}
+
+	// get sessionid cookie
+	cookie, err := r.Cookie("session_key")
+	if err != nil {
+		return err
+	}
+
+	// session_key was found, check database for same key
+	session, err := a.storage.GetSession(cookie.Value)
+	if err != nil {
+		return err
+	}
+
+	ss_cancel_err := a.storage.CancelSession(*session)
+	if ss_cancel_err != nil {
+		return ss_cancel_err
+	}
+
+	// remove session key from header
+	new_cookie := http.Cookie{
+		Name:    "session_key",
+		Value:   "",
+		Path:    "/",
+		Expires: time.Unix(0, 0),
+	}
+	http.SetCookie(w, &new_cookie)
 
 	return nil
 }

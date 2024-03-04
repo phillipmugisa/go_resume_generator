@@ -1,8 +1,8 @@
 {{ define "content" }}
-<div class="sign-in-form">
-    <header>
-        <h2>Log in to your resume voult</h2>
-        <p>Access/Modify/Share your resumes all in one place</p>
+<div class="grid justify-center bg-white shadow-lg justify-self-center gap-6 py-12 px-6 text-center w-4/12 rounded-xl">
+    <header class="grid gap-2">
+        <h2 class="text-xl text-slate-900 font-medium capitalize">Log in to your resume voult</h2>
+        <p class="text-base text-slate-500 font-normal">Access/Modify/Share your resumes all in one place</p>
     </header>
     
     {{ if .error_message }}
@@ -17,13 +17,13 @@
     </div>
     {{ end }}
 
-    <form hx-post="/auth/login/"  hx-target="#app-area">
-        <input type="text" name="username" placeholder="Username" value="{{ .username }}">
-        <input type="password" name="password" id="">
-        <input type="submit" value="Sign in">
+    <form hx-post="/auth/login/"  hx-target="#app-area" class="grid gap-4">
+        <input type="text" name="username" placeholder="Username" value="{{ .username }}" class="px-3 py-3 text-base text-gray-800 border-solid border-2 border-slate-300 rounded bg-gray-50 outline-transparent focus:outline-slate-400 w-full">
+        <input type="password" name="password" id="" placeholder="password" class="px-3 py-3 text-base text-gray-800 border-solid border-2 border-slate-300 rounded bg-gray-50 outline-transparent focus:outline-slate-400 w-full">
+        <input type="submit" value="Sign in" class="px-6 py-3 text-base bg-slate-900 text-slate-50 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors duration-200 ease-in-out">
     </form>
     <footer>
-        <a hx-get="/auth/signup/" hx-target="#app-area">Create resume voult</a>
+        <a hx-get="/auth/signup/" hx-target="#app-area" class="cursor-pointer text-teal-500 text-base">Create resume voult</a>
     </footer>
 </div>
 {{ end }}

@@ -5,14 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Online Resume Generator</title>
     <link rel="stylesheet" href="/static/assets/icons/font-awesome/css/font-awesome.min.css">
-    <!-- <script src="https://cdn.tailwindcss.com"></script> -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="/static/js/htmx.min.js"></script>
+    <script src="/static/css/tailwind.css"></script>
 </head>
-<body>
-    <section id="app-area">
+<body class="bg-slate-50 grid gap-2 p-2" id="app-area">
+    <nav class="mx-auto bg-gray-50 shadow-md my-5 justify-items-center grid grid-flow-col rounded-lg overflow-hidden">
+        <a hx-get="/" hx-target="#app-area" class="cursor-pointer px-6 py-3 bg-white hover:bg-slate-800 hover:text-stone-50 transition-colors duration-300 ease-in-out text-center text-gray-900 text-base">Home</a>
+        <a hx-get="/" hx-target="#app-area" class="cursor-pointer px-6 py-3 bg-white hover:bg-slate-800 hover:text-stone-50 transition-colors duration-300 ease-in-out text-center text-gray-900 text-base">Voult</a>
+        <a hx-get="/" hx-target="#app-area" class="cursor-pointer px-6 py-3 bg-white hover:bg-slate-800 hover:text-stone-50 transition-colors duration-300 ease-in-out text-center text-gray-900 text-base">Profile</a>
+        <a hx-get="/auth/logout/" hx-target="#app-area" class="cursor-pointer px-6 py-3 bg-white hover:bg-slate-800 hover:text-stone-50 transition-colors duration-300 ease-in-out text-center text-gray-900 text-base">Logout</a>
+    </nav>
     {{ block "content" . }}
-        This is a placeholder
+    
     {{ end }}
-    </section>
 </body>
 </html>

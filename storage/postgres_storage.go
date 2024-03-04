@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
@@ -38,7 +39,6 @@ func initPostgresDB() (*sql.DB, error) {
 
 	db, err := sql.Open("postgres", dbUrl)
 	if err != nil {
-		fmt.Println("ERROR: ", err)
 		return nil, errors.New("couldnot connect to database")
 	}
 
@@ -135,14 +135,23 @@ func (s *PostgresStorage) createUserImageTable() error {
 
 func (s *PostgresStorage) GetUsers(keys map[string]string) ([]*data.User, error) {
 
-	query := "SELECT id, username, firstname, lastname, email, bio, phone, country, password FROM Users"
+	query := "SELECT id, username, firstname, lastname, email, bio, phone, country, password FROM Users WHERE"
 	if len(keys) > 0 {
 		loop_counter := 0
 		for k, v := range keys {
-			if loop_counter > 0 {
-				query = query + fmt.Sprintf("AND %s = %s ", k, v)
+
+			var query_part string
+			_, err := strconv.Atoi(v)
+			if err != nil {
+				query_part = fmt.Sprintf(" %s = '%s' ", k, v)
 			} else {
-				query = query + fmt.Sprintf("%s = %s ", k, v)
+				query_part = fmt.Sprintf(" %s = %s ", k, v)
+			}
+
+			if loop_counter > 0 {
+				query = query + fmt.Sprintf(" AND %s ", query_part)
+			} else {
+				query = query + query_part
 			}
 			loop_counter++
 		}
@@ -342,28 +351,47 @@ func (s *PostgresStorage) createSessionTable() error {
 }
 
 func (s *PostgresStorage) CreateSession(session data.Session) error {
-	query := "INSERT INTO Sessions (user_id, key, expires_on, expired) VALUES ($1, $2, $3, $4)"
-
 	user_id, f_err := s.getUserID(session.User.Username)
 	if f_err != nil {
 		return f_err
 	}
+
+	// delete existing active sessions
+	delete_query := "DELETE FROM Sessions WHERE user_id = $1"
+	_, delete_err := s.db.Exec(delete_query, user_id)
+	if delete_err != nil {
+		return delete_err
+	}
+
+	// create new session
+	query := "INSERT INTO Sessions (user_id, key, expires_on, expired) VALUES ($1, $2, $3, $4)"
 
 	_, err := s.db.Query(query, user_id, session.Key, session.Expires_on, session.Expired)
 	return err
 }
 
 func (s *PostgresStorage) GetSession(key string) (*data.Session, error) {
+	var user_id int
 
 	session := new(data.Session)
-	q := s.db.QueryRow("SELECT Key, expires_on FROM Sessions WHERE Key = $1", key)
+	q := s.db.QueryRow("SELECT * FROM Sessions WHERE Key = $1", key)
 	err := q.Scan(
+		&session.Id,
+		&user_id,
 		&session.Key,
 		&session.Expires_on,
+		&session.Expired,
 	)
+
 	if err != nil {
 		return nil, err
 	}
+
+	users, err := s.GetUsers(map[string]string{"id": fmt.Sprintf("%d", user_id)})
+	if err != nil {
+		return nil, err
+	}
+	session.User = *users[0]
 	return session, nil
 }
 
@@ -442,11 +470,21 @@ func (s *PostgresStorage) GetProjects(keys map[string]string) ([]*data.Project, 
 			k = "user"
 			v = fmt.Sprintf("%d", user_id)
 		}
-		if loop_counter > 0 {
-			query = query + fmt.Sprintf("AND %s = %s ", k, v)
+
+		var query_part string
+		_, err := strconv.Atoi(v)
+		if err != nil {
+			query_part = fmt.Sprintf(" %s = '%s' ", k, v)
 		} else {
-			query = query + fmt.Sprintf("%s = %s ", k, v)
+			query_part = fmt.Sprintf(" %s = %s ", k, v)
 		}
+
+		if loop_counter > 0 {
+			query = query + fmt.Sprintf(" AND %s ", query_part)
+		} else {
+			query = query + query_part
+		}
+
 		loop_counter++
 	}
 
@@ -519,11 +557,21 @@ func (s *PostgresStorage) GetProjectsByTechStack(keys map[string]string) ([]*dat
 		if k == "username" {
 			continue
 		}
-		if loop_counter > 0 {
-			query = query + fmt.Sprintf("AND %s = %s ", k, v)
+
+		var query_part string
+		_, err := strconv.Atoi(v)
+		if err != nil {
+			query_part = fmt.Sprintf(" %s = '%s' ", k, v)
 		} else {
-			query = query + fmt.Sprintf("%s = %s ", k, v)
+			query_part = fmt.Sprintf(" %s = %s ", k, v)
 		}
+
+		if loop_counter > 0 {
+			query = query + fmt.Sprintf(" AND %s ", query_part)
+		} else {
+			query = query + query_part
+		}
+
 		loop_counter++
 	}
 
@@ -589,7 +637,7 @@ func (s *PostgresStorage) scanProjects(rows *sql.Rows) ([]*data.Project, error) 
 			return projects, err
 		}
 
-		users, _ := s.GetUsers(map[string]string{"user_id": fmt.Sprintf("%d", user_id)})
+		users, _ := s.GetUsers(map[string]string{"id": fmt.Sprintf("%d", user_id)})
 		project.User = *users[0]
 
 		projects = append(projects, project)
@@ -658,11 +706,21 @@ func (s *PostgresStorage) GetEmployments(keys map[string]string) ([]*data.Employ
 			k = "user"
 			v = fmt.Sprintf("%d", user_id)
 		}
-		if loop_counter > 0 {
-			query = query + fmt.Sprintf("AND %s = %s ", k, v)
+
+		var query_part string
+		_, err := strconv.Atoi(v)
+		if err != nil {
+			query_part = fmt.Sprintf(" %s = '%s' ", k, v)
 		} else {
-			query = query + fmt.Sprintf("%s = %s ", k, v)
+			query_part = fmt.Sprintf(" %s = %s ", k, v)
 		}
+
+		if loop_counter > 0 {
+			query = query + fmt.Sprintf(" AND %s ", query_part)
+		} else {
+			query = query + query_part
+		}
+
 		loop_counter++
 	}
 
@@ -730,11 +788,21 @@ func (s *PostgresStorage) GetEmploymentsByTechStack(keys map[string]string) ([]*
 		if k == "username" {
 			continue
 		}
-		if loop_counter > 0 {
-			query = query + fmt.Sprintf("AND %s = %s ", k, v)
+
+		var query_part string
+		_, err := strconv.Atoi(v)
+		if err != nil {
+			query_part = fmt.Sprintf(" %s = '%s' ", k, v)
 		} else {
-			query = query + fmt.Sprintf("%s = %s ", k, v)
+			query_part = fmt.Sprintf(" %s = %s ", k, v)
 		}
+
+		if loop_counter > 0 {
+			query = query + fmt.Sprintf(" AND %s ", query_part)
+		} else {
+			query = query + query_part
+		}
+
 		loop_counter++
 	}
 
@@ -801,7 +869,7 @@ func (s *PostgresStorage) scanEmployments(rows *sql.Rows) ([]*data.Employment, e
 			return Employments, err
 		}
 
-		users, _ := s.GetUsers(map[string]string{"user_id": fmt.Sprintf("%d", user_id)})
+		users, _ := s.GetUsers(map[string]string{"id": fmt.Sprintf("%d", user_id)})
 		Employment.User = *users[0]
 
 		Employments = append(Employments, Employment)
@@ -859,11 +927,21 @@ func (s *PostgresStorage) GetHobbies(keys map[string]string) ([]*data.Hobby, err
 			k = "user"
 			v = fmt.Sprintf("%d", user_id)
 		}
-		if loop_counter > 0 {
-			query = query + fmt.Sprintf("AND %s = %s ", k, v)
+
+		var query_part string
+		_, err := strconv.Atoi(v)
+		if err != nil {
+			query_part = fmt.Sprintf(" %s = '%s' ", k, v)
 		} else {
-			query = query + fmt.Sprintf("%s = %s ", k, v)
+			query_part = fmt.Sprintf(" %s = %s ", k, v)
 		}
+
+		if loop_counter > 0 {
+			query = query + fmt.Sprintf(" AND %s ", query_part)
+		} else {
+			query = query + query_part
+		}
+
 		loop_counter++
 	}
 
@@ -960,11 +1038,21 @@ func (s *PostgresStorage) GetTechStacks(keys map[string]string) ([]*data.TechSta
 			k = "user"
 			v = fmt.Sprintf("%d", user_id)
 		}
-		if loop_counter > 0 {
-			query = query + fmt.Sprintf("AND %s = %s ", k, v)
+
+		var query_part string
+		_, err := strconv.Atoi(v)
+		if err != nil {
+			query_part = fmt.Sprintf(" %s = '%s' ", k, v)
 		} else {
-			query = query + fmt.Sprintf("%s = %s ", k, v)
+			query_part = fmt.Sprintf(" %s = %s ", k, v)
 		}
+
+		if loop_counter > 0 {
+			query = query + fmt.Sprintf(" AND %s ", query_part)
+		} else {
+			query = query + query_part
+		}
+
 		loop_counter++
 	}
 

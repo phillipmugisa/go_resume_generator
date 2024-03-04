@@ -590,7 +590,7 @@ func (s *MemoryStorage) scanProjects(rows *sql.Rows) ([]*data.Project, error) {
 			return projects, err
 		}
 
-		users, _ := s.GetUsers(map[string]string{"user_id": fmt.Sprintf("%d", user_id)})
+		users, _ := s.GetUsers(map[string]string{"id": fmt.Sprintf("%d", user_id)})
 		project.User = *users[0]
 
 		projects = append(projects, project)
@@ -802,7 +802,7 @@ func (s *MemoryStorage) scanEmployments(rows *sql.Rows) ([]*data.Employment, err
 			return Employments, err
 		}
 
-		users, _ := s.GetUsers(map[string]string{"user_id": fmt.Sprintf("%d", user_id)})
+		users, _ := s.GetUsers(map[string]string{"id": fmt.Sprintf("%d", user_id)})
 		Employment.User = *users[0]
 
 		Employments = append(Employments, Employment)

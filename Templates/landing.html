@@ -1,16 +1,18 @@
 {{ define "content" }}
-<div>
-    <h1>Online Resume Generator</h1>
-    <p>Skip the hustle, create and save resumes effortlessly with our intuitive Online Resume Generator.</p>
-    <div>
-        <a hx-get="/auth/login/" hx-target="#app-area">Create Your Resume</a>
+<div class="grid justify-center bg-white shadow-lg justify-self-center gap-6 py-12 px-6 text-center w-4/12 rounded-xl">
+    <div class="grid gap-4">
+        <!-- <h1 class="text-slate-800 text-xl font-bold">Online Resume Generator</h1> -->
+        <p class="text-slate-900 text-base grid gap-sm">
+            <span class="capitalize text-gray-400">Skip the hustle</span>
+            <span class="text-teal-500 font-normal text-2xl capitalize">create and save resumes effortlessly.</span>
+        </p>
     </div>
-    {{ block "user_list" . }}
-        This is a user list placeholder
-    {{ end }}
     <div>
+        <a hx-get="/auth/login/" hx-target="#app-area" class="px-6 py-3 text-base bg-slate-900 text-slate-50 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors duration-200 ease-in-out">Create Your Resume</a>
+    </div>
+    <div class="grid gap-2 text-slate-900 justify-center grid-flow-col">
         <span>Developed By: </span>
-        <a href="https://mugisathedev.netlify.app/"><i class="fa fa-globe"></i> Mugisa</a>
+        <a href="https://mugisathedev.netlify.app/" class="text-teal-500"><i class="fa fa-globe"></i> Mugisa</a>
     </div>
 </div>
 {{ end }}
