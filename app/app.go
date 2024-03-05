@@ -3,18 +3,21 @@ package app
 import (
 	"fmt"
 	"net/http"
+	"time"
 )
 
 func (a *AppServer) Run() error {
 	sm := http.NewServeMux()
+	server := &http.Server{
+		Addr:           fmt.Sprintf(":%s", a.port),
+		Handler:        sm,
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
+		MaxHeaderBytes: 1 << 20,
+	}
 
 	registerStaticRoutes(sm)
 	a.registerRoutes(sm)
-
-	server := &http.Server{
-		Addr:    fmt.Sprintf(":%s", a.port),
-		Handler: sm,
-	}
 
 	fmt.Printf("Running server on port %s...\n", a.port)
 	return server.ListenAndServe()
@@ -22,9 +25,9 @@ func (a *AppServer) Run() error {
 }
 
 func (a *AppServer) registerRoutes(sm *http.ServeMux) {
+	sm.HandleFunc("/", MakeHTTPHandler(a.handleHomeView))
 	sm.HandleFunc("/auth/", MakeHTTPHandler(a.handleAuthView))
 	sm.HandleFunc("/landing/", MakeHTTPHandler(a.handleLandingView))
-	sm.HandleFunc("/", MakeHTTPHandler(a.handleHomeView))
 }
 
 func registerStaticRoutes(sm *http.ServeMux) {

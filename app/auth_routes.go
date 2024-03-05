@@ -2,37 +2,45 @@ package app
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/phillipmugisa/go_resume_generator/data"
 )
 
-func (a *AppServer) handleAuthView(c context.Context, w http.ResponseWriter, r *http.Request) error {
+func (a *AppServer) handleAuthView(c context.Context, w http.ResponseWriter, r *http.Request) *HandlerError {
 
 	subpath := r.URL.Path[len("/auth/"):]
 
-	fmt.Println("subpath: ", subpath)
-
 	switch subpath {
-	case "login", "login/":
+	case "signin", "signin/":
 		return a.handleLogin(c, w, r)
 	case "signup", "signup/":
 		return a.handleSignUp(c, w, r)
 	case "logout", "logout/":
 		return a.handleLogout(c, w, r)
 	default:
-		return errors.New("page not found")
+		return &HandlerError{
+			code:    http.StatusNotFound,
+			message: "address not found",
+		}
 	}
 }
 
-func (a *AppServer) handleLogin(c context.Context, w http.ResponseWriter, r *http.Request) error {
+func (a *AppServer) handleLogin(c context.Context, w http.ResponseWriter, r *http.Request) *HandlerError {
+
+	// check if user is logged and redirect
+	_, err := a.IsAuthenticated(r)
+	if err == nil {
+		// user is already logged in
+		http.Redirect(w, r, "/", http.StatusMovedPermanently)
+		return nil
+	}
 
 	contextData := map[string]string{}
 
 	if r.Method == http.MethodPost {
+
 		// login user in
 		r.ParseForm()
 
@@ -44,17 +52,9 @@ func (a *AppServer) handleLogin(c context.Context, w http.ResponseWriter, r *htt
 		err := a.Login(username, password, w)
 		if err != nil {
 			contextData["error_message"] = "Invalid username/password."
-			return a.RenderHtml(c, w, r, []string{"auth/login.html"}, contextData)
+			http.Redirect(w, r, "/auth/signin/", http.StatusMovedPermanently)
 		}
 
-		http.Redirect(w, r, "/", http.StatusMovedPermanently)
-		return nil
-	}
-
-	// check is user is logged in
-	_, err := a.IsAuthenticated(r)
-	if err == nil {
-		// user is already logged in
 		http.Redirect(w, r, "/", http.StatusMovedPermanently)
 		return nil
 	}
@@ -63,11 +63,19 @@ func (a *AppServer) handleLogin(c context.Context, w http.ResponseWriter, r *htt
 	return a.RenderHtml(c, w, r, []string{"auth/login.html"}, contextData)
 }
 
-func (a *AppServer) handleLogout(c context.Context, w http.ResponseWriter, r *http.Request) error {
-	fmt.Println("here")
+func (a *AppServer) handleLogout(c context.Context, w http.ResponseWriter, r *http.Request) *HandlerError {
+
+	// check if user is logged and redirect
+	_, auth_check_err := a.IsAuthenticated(r)
+	if auth_check_err != nil {
+		// user is already logged in
+		http.Redirect(w, r, "/auth/signin/", http.StatusMovedPermanently)
+		return nil
+	}
+
 	err := a.Logout(w, r)
 	if err == nil {
-		http.Redirect(w, r, "/auth/login", http.StatusMovedPermanently)
+		http.Redirect(w, r, "/auth/signin/", http.StatusMovedPermanently)
 		return nil
 	}
 
@@ -75,11 +83,11 @@ func (a *AppServer) handleLogout(c context.Context, w http.ResponseWriter, r *ht
 	return nil
 }
 
-func (a *AppServer) handleSignUp(c context.Context, w http.ResponseWriter, r *http.Request) error {
+func (a *AppServer) handleSignUp(c context.Context, w http.ResponseWriter, r *http.Request) *HandlerError {
 
 	contextData := map[string]string{}
 
-	// check if user is logged in redirect
+	// check if user is logged and redirect
 	_, err := a.IsAuthenticated(r)
 	if err == nil {
 		// user is already logged in
@@ -121,7 +129,10 @@ func (a *AppServer) handleSignUp(c context.Context, w http.ResponseWriter, r *ht
 			r.FormValue("start_date"),
 		)
 		if err != nil {
-			return err
+			return &HandlerError{
+				code:    http.StatusInternalServerError,
+				message: "unable to create account",
+			}
 		}
 
 		// save user data to database
@@ -133,7 +144,10 @@ func (a *AppServer) handleSignUp(c context.Context, w http.ResponseWriter, r *ht
 
 		err = a.HandleImageUpload(*user, r)
 		if err != nil {
-			return err
+			return &HandlerError{
+				code:    http.StatusInternalServerError,
+				message: "unable to store image",
+			}
 		}
 
 		// send verification link

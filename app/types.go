@@ -13,3 +13,14 @@ func NewAppServer(p string, s storage.Storage) *AppServer {
 		storage: s,
 	}
 }
+
+type HandlerError struct {
+	message string
+	code    int
+}
+
+func (e HandlerError) Error() string {
+	return e.message
+}
+
+type ApiError struct{}

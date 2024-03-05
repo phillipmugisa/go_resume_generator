@@ -16,25 +16,18 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type httpHandler func(c context.Context, w http.ResponseWriter, r *http.Request) error
+type httpHandler func(c context.Context, w http.ResponseWriter, r *http.Request) *HandlerError
 
 func MakeHTTPHandler(f httpHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// log request
-		fmt.Printf("%s %s\n", r.Method, r.URL.String())
+		fmt.Printf("%s %s %s\n", time.Now().UTC(), r.Method, r.URL.String())
 
-		ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
-		// defer cancel()
-
+		ctx := context.Background()
 		err := f(ctx, w, r)
 		if err != nil {
 			handlerRouterError(ctx, err)
 		}
-
-		// select {
-		// case <-ctx.Done():
-		// 	log.Fatalf("Request to %s took long", r.URL.String())
-		// }
 	}
 }
 
@@ -81,7 +74,7 @@ func (a *AppServer) HandleImageUpload(user data.User, r *http.Request) error {
 	return nil
 }
 
-func (a *AppServer) RenderHtml(ctx context.Context, w http.ResponseWriter, r *http.Request, templates []string, contextData any) error {
+func (a *AppServer) RenderHtml(ctx context.Context, w http.ResponseWriter, r *http.Request, templates []string, contextData any) *HandlerError {
 	// pass user data to template by default if user is authenticated
 
 	var template_dirs []string
@@ -96,29 +89,25 @@ func (a *AppServer) RenderHtml(ctx context.Context, w http.ResponseWriter, r *ht
 
 	tmpl, parseError := template.ParseFiles(template_dirs...)
 	if parseError != nil {
-		return fmt.Errorf("error loading template: %v", parseError)
+		return &HandlerError{
+			code:    http.StatusInternalServerError,
+			message: fmt.Sprintf("error loading template: %v", parseError),
+		}
 	}
-
-	// tmpl = tmpl.Funcs(template.FuncMap{
-	// 	"getLoggedInUser": func() data.User {
-	// 		user, auth_err := a.IsAuthenticated(r)
-	// 		if auth_err == nil {
-	// 			return *user
-	// 		}
-	// 		return data.User{}
-	// 	},
-	// })
 
 	// err = tmpl.ExecuteTemplate(w, "layout.html", contextData)
 	err := tmpl.Execute(w, contextData)
 	if err != nil {
-		return fmt.Errorf("error rendering template: %v", err)
+		return &HandlerError{
+			code:    http.StatusInternalServerError,
+			message: fmt.Sprintf("error loading template: %v", parseError),
+		}
 	}
 	return nil
 }
 
-func handlerRouterError(c context.Context, e error) {
-	fmt.Println(e)
+func handlerRouterError(c context.Context, err *HandlerError) {
+	fmt.Println(err.code, err.message)
 }
 
 func checkSessionKey(key string) error {
