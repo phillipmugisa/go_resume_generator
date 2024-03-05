@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -11,13 +12,16 @@ import (
 
 func (a *AppServer) handleAuthView(c context.Context, w http.ResponseWriter, r *http.Request) error {
 
-	url_parts := strings.Split(r.URL.String(), "auth")
-	switch url_parts[1] {
-	case "/login/":
+	subpath := r.URL.Path[len("/auth/"):]
+
+	fmt.Println("subpath: ", subpath)
+
+	switch subpath {
+	case "login", "login/":
 		return a.handleLogin(c, w, r)
-	case "/signup/":
+	case "signup", "signup/":
 		return a.handleSignUp(c, w, r)
-	case "/logout/":
+	case "logout", "logout/":
 		return a.handleLogout(c, w, r)
 	default:
 		return errors.New("page not found")
@@ -60,9 +64,10 @@ func (a *AppServer) handleLogin(c context.Context, w http.ResponseWriter, r *htt
 }
 
 func (a *AppServer) handleLogout(c context.Context, w http.ResponseWriter, r *http.Request) error {
+	fmt.Println("here")
 	err := a.Logout(w, r)
 	if err == nil {
-		http.Redirect(w, r, "/auth/login/", http.StatusMovedPermanently)
+		http.Redirect(w, r, "/auth/login", http.StatusMovedPermanently)
 		return nil
 	}
 
@@ -74,7 +79,13 @@ func (a *AppServer) handleSignUp(c context.Context, w http.ResponseWriter, r *ht
 
 	contextData := map[string]string{}
 
-	// check is user is logged in redirest
+	// check if user is logged in redirect
+	_, err := a.IsAuthenticated(r)
+	if err == nil {
+		// user is already logged in
+		http.Redirect(w, r, "/", http.StatusMovedPermanently)
+		return nil
+	}
 
 	// if not logged in display landing page
 

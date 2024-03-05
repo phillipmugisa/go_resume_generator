@@ -20,7 +20,7 @@ func (a *AppServer) handleHomeView(c context.Context, w http.ResponseWriter, r *
 	// check is user is logged in
 	_, err := a.IsAuthenticated(r)
 	if err != nil {
-		http.Redirect(w, r, "/auth/login/", http.StatusMovedPermanently)
+		http.Redirect(w, r, "/auth/login", http.StatusMovedPermanently)
 		return nil
 	}
 

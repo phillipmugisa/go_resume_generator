@@ -17,13 +17,13 @@
     </div>
     {{ end }}
 
-    <form hx-post="/auth/login/"  hx-target="#app-area" class="grid gap-4">
+    <form hx-post="/auth/login"  hx-target="#app-area" class="grid gap-4">
         <input type="text" name="username" placeholder="Username" value="{{ .username }}" class="px-3 py-3 text-base text-gray-800 border-solid border-2 border-slate-300 rounded bg-gray-50 outline-transparent focus:outline-slate-400 w-full">
         <input type="password" name="password" id="" placeholder="password" class="px-3 py-3 text-base text-gray-800 border-solid border-2 border-slate-300 rounded bg-gray-50 outline-transparent focus:outline-slate-400 w-full">
         <input type="submit" value="Sign in" class="px-6 py-3 text-base bg-slate-900 text-slate-50 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors duration-200 ease-in-out">
     </form>
     <footer>
-        <a hx-get="/auth/signup/" hx-target="#app-area" class="cursor-pointer text-teal-500 text-base">Create resume voult</a>
+        <a hx-get="/auth/signup" hx-target="#app-area" class="cursor-pointer text-teal-500 text-base">Create resume voult</a>
     </footer>
 </div>
 {{ end }}

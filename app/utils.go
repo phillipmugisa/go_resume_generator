@@ -20,11 +20,21 @@ type httpHandler func(c context.Context, w http.ResponseWriter, r *http.Request)
 
 func MakeHTTPHandler(f httpHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// log request
+		fmt.Printf("%s %s\n", r.Method, r.URL.String())
+
 		ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+		// defer cancel()
+
 		err := f(ctx, w, r)
 		if err != nil {
 			handlerRouterError(ctx, err)
 		}
+
+		// select {
+		// case <-ctx.Done():
+		// 	log.Fatalf("Request to %s took long", r.URL.String())
+		// }
 	}
 }
 
